@@ -87,15 +87,8 @@ func (d *progressDisplay) menuLines(width int) []string {
 			message = "Stop operation? y=yes / n=continue"
 		}
 	case d.input != nil:
-		if d.idle {
-			if width >= 65 {
-				message = "Jobs finished. [R ID] Retry  [Q] Exit  [H] Help  [N/P] Pages"
-			} else {
-				message = "[R ID] Retry [Q] Exit [N/P] Pages [H] Help"
-			}
-		} else {
-			message = "[Q] Stop  [H] Help  [N/P] Pages"
-		}
+		return nanoMenuLines(width)
+
 	}
 	return wrapProgress(message, width)
 }
@@ -150,9 +143,9 @@ func (d *progressDisplay) renderContent(now time.Time, terminalWidth, terminalHe
 		footer = append(footer, wrapProgress(d.notice, width)...)
 	}
 	if d.help {
-		help := "n/p next/previous page | first/last | g ID find host. Commands need Enter. Quit does not undo device changes."
+		help := "n/p next/previous page | first/last | g ID find host. Ctrl+V/Ctrl+Y page immediately. Text commands use Enter. Quit does not undo device changes."
 		if width < 65 {
-			help = "n/p pages | first/last | g ID jump"
+			help = "^V/^Y pages | ^W find host | ^X exit"
 		}
 		footer = append(footer, wrapProgress(help, width)...)
 	}
@@ -163,7 +156,7 @@ func (d *progressDisplay) renderContent(now time.Time, terminalWidth, terminalHe
 		d.pageSize = 0
 		d.page = max(0, d.page)
 		if !d.closed && d.input != nil && d.pendingRetry == "" && !d.confirmStop && !d.stopping {
-			menu = wrapProgress("[Q] Quit [H] Help", width)
+			menu = wrapProgress("^X Exit ^G Help", width)
 		}
 		compact := []string{"Enlarge terminal for host table.", fmt.Sprintf("%d/%d C:%d F:%d", counts["STARTED"], len(rows), counts["DONE"], counts["FAILED"])}
 		if d.pendingRetry != "" && (width < 25 || len(menu) > height) {

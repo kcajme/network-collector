@@ -128,7 +128,7 @@ func TestProgressResizesAndClampsPageWithoutLosingPrompts(t *testing.T) {
 	}
 	d.confirmStop = false
 	small := d.renderSize(time.Now(), 20, 5)
-	if !strings.Contains(small, "Enlarge") || !strings.Contains(small, "[Q] Quit") {
+	if !strings.Contains(small, "Enlarge") || !strings.Contains(small, "^X Exit") {
 		t.Fatalf("compact instructions unavailable: %s", small)
 	}
 }
@@ -166,7 +166,7 @@ func TestSparseHostFooterIsPinnedToBottomOnResize(t *testing.T) {
 			if strings.Contains(line, "Started") || strings.Contains(line, "C:") {
 				total = i
 			}
-			if strings.Contains(line, "[Q]") {
+			if strings.Contains(line, "^X") {
 				menu = i
 			}
 		}

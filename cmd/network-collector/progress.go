@@ -186,7 +186,7 @@ func (d *progressDisplay) render(now time.Time) string {
 }
 
 func (d *progressDisplay) draw(now time.Time) {
-	frame := strings.ReplaceAll(d.render(now), "\n", "\r\n")
+	frame := strings.ReplaceAll(styleNanoMenu(d.render(now)), "\n", "\r\n")
 	fmt.Fprint(d.writer, "\x1b[H\x1b[2J", frame)
 	if !d.closed && d.input != nil && d.paused == 0 {
 		width, height := d.dimensions()

@@ -41,6 +41,23 @@ for configuration management. The two can complement each other.
 
 ## Live operation progress
 
+The bottom menu uses a Nano-style two-row shortcut strip. Caret notation means
+Ctrl: `^V` is Ctrl+V, for example. Keys are highlighted in reverse video.
+
+| Shortcut | Action |
+| --- | --- |
+| Ctrl+G | Toggle help immediately |
+| Ctrl+X | Open exit/stop confirmation |
+| Ctrl+Y | Previous host page immediately |
+| Ctrl+V | Next host page immediately |
+| Ctrl+R | Prepare a failed-host retry: enter the host ID, then Enter |
+| Ctrl+W | Find a host: enter its ID, then Enter |
+
+Paging and help do not require Enter or submit/clear the current command draft.
+Exit and retry still require confirmation. Existing text commands (`q`, `h`,
+`n`, `p`, `r <ID>`, `g <ID>`) remain available with Enter.
+
+
 Host rows stay at the top of the viewport. The host totals, page information,
 and menu are anchored at the bottom, directly above `Command>`, even when only
 one host is selected. Unused host rows remain blank; resizing moves the footer
@@ -53,7 +70,7 @@ Enter to submit a command. Backspace/Delete, Left/Right, Home/End, Ctrl+A/Ctrl+E
 and Ctrl+U (clear line) support editing. Ctrl+C remains ignored in the menu.
 
 On larger terminals, an ASCII frame and section dividers separate the host
-table, totals and bracketed shortcut legend. Small terminals use the compact
+table, totals and Nano-style shortcut legend. Small terminals use the compact
 layout. Normal terminal input is restored for credentials, approvals and RSA
 passcodes, then the editable command line resumes afterward. Terminal settings
 are restored on exit.

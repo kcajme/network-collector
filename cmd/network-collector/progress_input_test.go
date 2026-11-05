@@ -77,7 +77,7 @@ func TestProgressUsesBoundedAsciiFrame(t *testing.T) {
 	if !strings.HasPrefix(lines[0], "+---") || !strings.HasPrefix(lines[len(lines)-1], "+---") {
 		t.Fatal("ASCII frame missing")
 	}
-	if !strings.Contains(frame, "[Q]") || !strings.Contains(frame, "[N/P]") {
+	if !strings.Contains(frame, "^X") || !strings.Contains(frame, "^V") {
 		t.Fatal("shortcut legend missing")
 	}
 	assertFrameFits(t, frame, 80, 24)
@@ -85,5 +85,62 @@ func TestProgressUsesBoundedAsciiFrame(t *testing.T) {
 		if r > 127 {
 			t.Fatal("frame contains non-ASCII decoration")
 		}
+	}
+}
+
+func TestNanoPageControlsAreImmediateAndPreserveDraft(t *testing.T) {
+	d := layoutFixture()
+	d.size = func() (int, int) { return 80, 12 }
+	for _, value := range []byte("r 12") {
+		d.acceptCommandByte(value)
+	}
+	d.draw(time.Now())
+	d.acceptCommandByte(22) // Ctrl+V: no Enter.
+	d.draw(time.Now())
+	if d.page != 1 || string(d.commandBuffer) != "r 12" || d.commandCursor != 4 {
+		t.Fatal("next-page control changed the draft or required Enter")
+	}
+	d.acceptCommandByte(25) // Ctrl+Y: no Enter.
+	d.draw(time.Now())
+	if d.page != 0 || string(d.commandBuffer) != "r 12" || d.commandCursor != 4 {
+		t.Fatal("previous-page control changed the draft or required Enter")
+	}
+	if len(d.requests) != 0 {
+		t.Fatal("paging submitted a retry")
+	}
+}
+
+func TestNanoMenuControlsAndShortcutStrip(t *testing.T) {
+	d := layoutFixture()
+	d.size = func() (int, int) { return 80, 24 }
+	d.acceptCommandByte(7)
+	if !d.help {
+		t.Fatal("Ctrl+G did not open help")
+	}
+	d.acceptCommandByte(18)
+	if string(d.commandBuffer) != "r " {
+		t.Fatal("Ctrl+R did not prepare retry")
+	}
+	d.acceptCommandByte(23)
+	if string(d.commandBuffer) != "g " {
+		t.Fatal("Ctrl+W did not prepare host lookup")
+	}
+	d.acceptCommandByte(24)
+	if !d.confirmStop || d.stopping || len(d.commandBuffer) != 0 {
+		t.Fatal("Ctrl+X did not open safe exit confirmation")
+	}
+	d.confirmStop = false
+	lines := nanoMenuLines(75)
+	if len(lines) != 2 {
+		t.Fatalf("Nano strip has %d rows", len(lines))
+	}
+	for _, key := range []string{"^G Help", "^X Exit", "^R Retry Host", "^W Find Host", "^Y Prev Page", "^V Next Page"} {
+		if !strings.Contains(strings.Join(lines, "\n"), key) {
+			t.Fatalf("missing %s", key)
+		}
+	}
+	styled := styleNanoMenu(strings.Join(lines, "\n"))
+	if !strings.Contains(styled, "\x1b[7m^V\x1b[0m") {
+		t.Fatal("shortcut keys are not reverse-video highlighted")
 	}
 }

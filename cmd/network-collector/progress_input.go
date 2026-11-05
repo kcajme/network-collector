@@ -37,6 +37,45 @@ func (d *progressDisplay) restoreInput() {
 // Returns true when the editable command line changed. Time and redraws never
 // clear it. Commands execute only on Enter, preserving the existing menu model.
 func (d *progressDisplay) acceptCommandByte(value byte) bool {
+	// Nano-style controls execute without submitting or losing the draft line.
+	switch value {
+	case 22:
+		d.escapeInput = nil
+		d.page++
+		return true // Ctrl+V.
+	case 25:
+		d.escapeInput = nil
+		d.page--
+		return true // Ctrl+Y.
+	case 7:
+		d.escapeInput = nil
+		d.help = !d.help
+		return true // Ctrl+G.
+	case 24:
+		d.escapeInput = nil
+		d.pendingRetry = ""
+		d.confirmStop = true
+		d.commandBuffer = nil
+		d.commandCursor = 0
+		return true // Ctrl+X.
+	case 18, 23:
+		d.escapeInput = nil
+		if d.confirmStop || d.pendingRetry != "" || d.stopping {
+			return false
+		}
+		if value == 18 && !d.idle {
+			d.notice = "Retry is available after current jobs finish."
+			return true
+		}
+		d.commandBuffer = []byte("r ")
+		if value == 23 {
+			d.commandBuffer = []byte("g ")
+		}
+		d.commandCursor = len(d.commandBuffer)
+		d.notice = "Enter a host ID, then press Enter."
+		return true
+	}
+
 	if len(d.escapeInput) > 0 {
 		d.escapeInput = append(d.escapeInput, value)
 		if len(d.escapeInput) == 2 && (value == '[' || value == 'O') {
