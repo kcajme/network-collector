@@ -124,6 +124,13 @@ func loadInventory(inventoryFile, configFile string) (*InventoryConfig, error) {
 	if err := safeyaml.Unmarshal(b, &inventory); err != nil {
 		return nil, err
 	}
+	if inventory.Host != nil && inventory.Hosts != nil {
+		return nil, fmt.Errorf("inventory must use either host: or hosts:, not both")
+	}
+	if inventory.Host != nil {
+		inventory.Hosts = inventory.Host
+		inventory.Host = nil
+	}
 	inventory.baseDir = filepath.Dir(path)
 	for index := range inventory.Hosts {
 		resolveGNMICertificatePaths(inventory.Hosts[index].GNMI, inventory.baseDir)
@@ -495,7 +502,21 @@ func resolveInventoryDevices(devices []DeviceConfig, inventory *InventoryConfig)
 	var resolved []DeviceConfig
 	for _, device := range devices {
 		targets := inventoryTargets(device)
-		for _, groupName := range inventoryGroupNames(device) {
+		groups := inventoryGroupNames(device)
+		// A shared workflow without selectors or inline connection details
+		// applies to the complete inventory, in the file's declared order.
+		if len(targets) == 0 && len(groups) == 0 && strings.TrimSpace(device.Hostname) == "" && strings.TrimSpace(device.IP) == "" && inventory != nil {
+			if len(inventory.Hosts) == 0 {
+				return nil, fmt.Errorf("shared workflow inventory contains no hosts")
+			}
+			for _, host := range inventory.Hosts {
+				if strings.TrimSpace(device.Type) == "" && strings.TrimSpace(host.Type) == "" {
+					return nil, fmt.Errorf("inventory host %q requires type in the shared workflow config", inventoryHostKey(host))
+				}
+				targets = append(targets, inventoryHostKey(host))
+			}
+		}
+		for _, groupName := range groups {
 			if inventory == nil || inventory.Groups == nil {
 				return nil, fmt.Errorf("inventory group %q requested but no inventory groups are loaded", groupName)
 			}

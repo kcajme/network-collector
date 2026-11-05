@@ -1,0 +1,13 @@
+name_playbook: Shared IOS-XR health check
+inventory_file: inventory.yaml
+fail_on_fail: true
+
+execution:
+  max_parallel: 3
+
+ssh:
+  - type: cisco_iosxr
+    steps:
+      - name: show-version
+        category: prechecks
+        cmd: show version

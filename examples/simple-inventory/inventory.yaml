@@ -1,0 +1,5 @@
+host:
+  - name: router-01
+    ip: 192.0.2.10
+  - name: router-02
+    ip: 192.0.2.11

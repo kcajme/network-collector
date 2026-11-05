@@ -661,43 +661,42 @@ The `cmd/network-collector` example supports `ssh.steps`, which lets you run mul
 
 ### Inventory-based SSH targets
 
-You can keep connection details in `inventory.yaml` and reference them from `config.yaml`, which avoids repeating hostnames, IP addresses, and device types across playbook entries.
-
-Example `inventory.yaml`:
+Keep only host names and addresses in `inventory.yaml`. Groups are optional;
+they are not needed for a shared workflow.
 
 ```yaml
-hosts:
+host:
   - name: router-01
     ip: 192.0.2.10
-    type: cisco_ios
   - name: router-02
     ip: 192.0.2.11
-    type: cisco_ios
-
-groups:
-  ios:
-    hosts:
-      - router-01
-      - router-02
 ```
 
-Example `config.yaml`:
+Set the driver once in the workflow's `config.yaml` entry. Omitting host and
+group selectors applies that entry to every inventory host in file order:
 
 ```yaml
 inventory_file: inventory.yaml
-parsers_file: parsers.yaml
 
 ssh:
-  - host: router-01
-    cmd: show version
-
-  - group: ios
+  - type: cisco_iosxr
     steps:
       - name: show-version
+        category: prechecks
         cmd: show version
 ```
 
-Use `host` for one inventory host, `hosts` for a list of inventory hosts, `group` for one inventory group, or `groups` for multiple groups. Inventory hosts can define `name`, `hostname`, `ip` or `address`, `type`, `timeout`, and `operation_timeout`. Values in `config.yaml` override inventory values, so you can set a common `type` or timeout at the playbook entry if needed. Existing single-node entries with inline `hostname`, `ip`, and `type` continue to work without an inventory file.
+Adding a host requires editing only the inventory. Use the same form under
+`netconf:` for a shared NETCONF workflow. A shared entry needs a driver `type`
+when the inventory contains only names and IPs. Empty inventories and missing
+drivers are rejected. Inline `hostname`/`ip` entries and explicit `host`/`hosts`
+selectors retain their existing scope and are not expanded to all hosts.
+
+Both `host:` and the existing `hosts:` list spelling are accepted in inventory
+files; use one, not both. Existing optional host settings and `group`/`groups`
+selectors remain supported for advanced/older playbooks. The checked-in mixed
+platform examples retain explicit host selectors with drivers in `config.yaml`;
+see `examples/simple-inventory/` for the shared, selector-free form.
 
 ### NETCONF workflow targets
 

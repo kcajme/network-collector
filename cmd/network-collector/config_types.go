@@ -386,6 +386,7 @@ type InventoryGroupConfig struct {
 }
 
 type InventoryConfig struct {
+	Host    []InventoryHostConfig           `yaml:"host"`
 	Hosts   []InventoryHostConfig           `yaml:"hosts"`
 	Groups  map[string]InventoryGroupConfig `yaml:"groups"`
 	baseDir string
