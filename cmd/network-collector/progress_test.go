@@ -39,19 +39,19 @@ func TestProgressOrderingTimersAndTotals(t *testing.T) {
 	if len(positions) != 3 || positions["b"] >= positions["a"] || positions["a"] >= positions["c"] {
 		t.Fatalf("completion order wrong:\n%s", rows)
 	}
-	for _, want := range []string{"Total: 3", "Remaining: 1", "Done: 2", "12s"} {
+	for _, want := range []string{"Started: 2/3", "Complete: 2", "Failed: 0", "12s"} {
 		if !strings.Contains(rows, want) {
 			t.Fatalf("missing %q in %s", want, rows)
 		}
 	}
 	d.Handle(context.Background(), lifecycleEvent{Type: "run.completed", Timestamp: now.Add(13 * time.Second)})
 	rows = d.render(now.Add(time.Hour))
-	if !strings.Contains(rows, "Not run: 1") || !strings.Contains(rows, "Remaining: 0") {
+	if d.hosts[variableScopeKey("c", "3")].state != "NOT RUN" || !strings.Contains(rows, "Started: 2/3") {
 		t.Fatal(rows)
 	}
 	// A recurring occurrence reuses its host row and starts fresh timers.
 	emit("device.started", "a", "1", "", "", now.Add(time.Hour))
-	if !strings.Contains(d.render(now.Add(time.Hour)), "Active: 1") {
+	if d.hosts[variableScopeKey("a", "1")].state != "ACTIVE" || !strings.Contains(d.render(now.Add(time.Hour)), "Started: 2/3") {
 		t.Fatal("recurring host did not reset")
 	}
 }
@@ -123,4 +123,33 @@ func TestCategoryIsMetadataAndNestedStepsInherit(t *testing.T) {
 	if categories["child"] != "precheck" || categories["override"] != "install" || categories["after"] != "" {
 		t.Fatalf("wrong categories: %v", categories)
 	}
+}
+
+func TestCompactCountsTrackUniqueHostsThatBecameActive(t *testing.T) {
+	d := newProgressDisplay(io.Discard, []DeviceConfig{{Hostname: "a", IP: "1"}, {Hostname: "b", IP: "2"}, {Hostname: "c", IP: "3"}})
+	emit := func(kind, host, ip string, failed *bool) {
+		t.Helper()
+		d.Handle(context.Background(), lifecycleEvent{Type: kind, Hostname: host, IP: ip, Failed: failed})
+	}
+	check := func(want string) {
+		t.Helper()
+		frame := d.render(time.Now())
+		if !strings.Contains(frame, want) {
+			t.Fatalf("missing %q: %s", want, frame)
+		}
+	}
+	check("Started: 0/3 | Complete: 0 | Failed: 0")
+	emit("device.started", "a", "1", nil)
+	emit("device.started", "b", "2", nil)
+	failed := true
+	emit("device.completed", "a", "1", nil)
+	emit("device.completed", "b", "2", &failed)
+	check("Started: 2/3 | Complete: 1 | Failed: 1")
+	emit("device.started", "b", "2", nil)
+	check("Started: 2/3 | Complete: 1 | Failed: 0")
+	emit("device.completed", "b", "2", nil)
+	check("Started: 2/3 | Complete: 2 | Failed: 0")
+	// The third host has never reached ACTIVE, so it remains outside the numerator.
+	emit("run.completed", "", "", nil)
+	check("Started: 2/3 | Complete: 2 | Failed: 0")
 }

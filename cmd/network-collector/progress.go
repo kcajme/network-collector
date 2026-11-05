@@ -15,6 +15,7 @@ import (
 )
 
 type progressHost struct {
+	started                     bool
 	ended                       time.Time
 	name, state, category, step string
 	since                       time.Time
@@ -114,6 +115,7 @@ func (d *progressDisplay) Handle(_ context.Context, e lifecycleEvent) error {
 	if h != nil {
 		switch e.Type {
 		case "device.started":
+			h.started = true
 			h.state = "ACTIVE"
 			h.category = "Connecting"
 			h.step = "-"

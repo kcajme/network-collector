@@ -71,7 +71,7 @@ func TestProgressPaginationAccessesEveryHostAndKeepsGlobalTotals(t *testing.T) {
 	seen := map[string]bool{}
 	for page := 0; page < 100; page++ {
 		frame := d.render(time.Now())
-		if !strings.Contains(frame, "Total: 100") || !strings.Contains(frame, "Remaining: 100") {
+		if !strings.Contains(frame, "Started: 0/100") || !strings.Contains(frame, "Complete: 0") {
 			t.Fatalf("totals reflect only visible hosts: %s", frame)
 		}
 		for _, line := range strings.Split(frame, "\n") {
@@ -146,5 +146,58 @@ func TestRetryCannotBeConfirmedWhenWarningDoesNotFit(t *testing.T) {
 	d.handleCommand("y")
 	if d.pendingRetry != "" || len(d.requests) != 1 {
 		t.Fatal("retry unavailable after enlarging terminal")
+	}
+}
+
+func TestSparseHostFooterIsPinnedToBottomOnResize(t *testing.T) {
+	d := newProgressDisplay(io.Discard, []DeviceConfig{{Hostname: "lone-host", IP: "1"}})
+	d.input = os.Stdin
+	d.idle = true
+	previousTotal := -1
+	for _, size := range [][2]int{{80, 24}, {80, 40}, {120, 40}, {40, 12}, {20, 8}} {
+		frame := d.renderSize(time.Now(), size[0], size[1])
+		assertFrameFits(t, frame, size[0], size[1])
+		lines := strings.Split(strings.TrimSuffix(frame, "\n"), "\n")
+		if len(lines) != size[1]-2 {
+			t.Fatalf("footer left floating at %dx%d: %d lines", size[0], size[1], len(lines))
+		}
+		total, menu := -1, -1
+		for i, line := range lines {
+			if strings.Contains(line, "Started") || strings.Contains(line, "C:") {
+				total = i
+			}
+			if strings.Contains(line, "[Q]") {
+				menu = i
+			}
+		}
+		if total < 0 || menu <= total || menu < len(lines)-3 {
+			t.Fatalf("counts/menu are not at bottom: %s", frame)
+		}
+		if size == [2]int{80, 40} && total != previousTotal+16 {
+			t.Fatal("footer did not follow terminal height")
+		}
+		if size == [2]int{80, 24} {
+			previousTotal = total
+		}
+	}
+}
+
+func TestFooterPositionIndependentOfVisibleHostCount(t *testing.T) {
+	for _, size := range [][2]int{{80, 24}, {120, 40}, {40, 12}} {
+		positions := []int{}
+		for _, count := range []int{1, 2, 100} {
+			d := layoutFixture()
+			d.order = d.order[:count]
+			frame := d.renderSize(time.Now(), size[0], size[1])
+			for i, line := range strings.Split(frame, "\n") {
+				if strings.Contains(line, "Started") || strings.Contains(line, "C:") {
+					positions = append(positions, i)
+					break
+				}
+			}
+		}
+		if len(positions) != 3 || positions[0] != positions[1] || positions[1] != positions[2] {
+			t.Fatalf("footer moved with host count at %v: %v", size, positions)
+		}
 	}
 }

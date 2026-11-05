@@ -131,21 +131,17 @@ func (d *progressDisplay) renderContent(now time.Time, terminalWidth, terminalHe
 	ids := map[string]int{}
 	for i, key := range d.order {
 		counts[d.hosts[key].state]++
+		if d.hosts[key].started {
+			counts["STARTED"]++
+		}
 		ids[key] = i + 1
 	}
 	menu := d.menuLines(width)
-	var summary []string
-	if width >= 65 {
-		summary = []string{
-			fmt.Sprintf("Total: %d | Active: %d | Queued: %d | Remaining: %d", len(rows), counts["ACTIVE"], counts["QUEUED"], counts["ACTIVE"]+counts["QUEUED"]),
-			fmt.Sprintf("Done: %d | Failed: %d | Not run: %d | Cancelled: %d", counts["DONE"], counts["FAILED"], counts["NOT RUN"], counts["CANCELLED"]),
-		}
-	} else {
-		summary = []string{
-			fmt.Sprintf("Total %d Active %d Queued %d Left %d", len(rows), counts["ACTIVE"], counts["QUEUED"], counts["ACTIVE"]+counts["QUEUED"]),
-			fmt.Sprintf("Done %d Fail %d NotRun %d Cancel %d", counts["DONE"], counts["FAILED"], counts["NOT RUN"], counts["CANCELLED"]),
-		}
+	summary := []string{fmt.Sprintf("Started: %d/%d | Complete: %d | Failed: %d", counts["STARTED"], len(rows), counts["DONE"], counts["FAILED"])}
+	if width < 50 {
+		summary = []string{fmt.Sprintf("Started %d/%d Complete %d Failed %d", counts["STARTED"], len(rows), counts["DONE"], counts["FAILED"])}
 	}
+
 	footer := []string{}
 	for _, line := range summary {
 		footer = append(footer, wrapProgress(line, width)...)
@@ -169,7 +165,7 @@ func (d *progressDisplay) renderContent(now time.Time, terminalWidth, terminalHe
 		if !d.closed && d.input != nil && d.pendingRetry == "" && !d.confirmStop && !d.stopping {
 			menu = wrapProgress("[Q] Quit [H] Help", width)
 		}
-		compact := []string{"Enlarge terminal for host table.", fmt.Sprintf("Total %d Left %d Failed %d", len(rows), counts["ACTIVE"]+counts["QUEUED"], counts["FAILED"])}
+		compact := []string{"Enlarge terminal for host table.", fmt.Sprintf("%d/%d C:%d F:%d", counts["STARTED"], len(rows), counts["DONE"], counts["FAILED"])}
 		if d.pendingRetry != "" && (width < 25 || len(menu) > height) {
 			menu = wrapProgress("Enlarge terminal to confirm retry. n cancels.", width)
 		}
@@ -178,7 +174,10 @@ func (d *progressDisplay) renderContent(now time.Time, terminalWidth, terminalHe
 			menu = menu[len(menu)-min(len(menu), height):]
 		}
 		compact = compact[:min(len(compact), max(0, height-len(menu)))]
-		compact = append(compact, menu...)
+		// Keep the resize hint at the top and counts/commands at the bottom.
+		split := min(1, len(compact))
+		tail := append(append([]string(nil), compact[split:]...), menu...)
+		compact = pinProgressFooter(compact[:split], tail, height)
 		return finishProgress(compact, width, height, terminalHeight)
 	}
 	d.pageSize = capacity
@@ -213,8 +212,8 @@ func (d *progressDisplay) renderContent(now time.Time, terminalWidth, terminalHe
 	if len(rows) == 0 {
 		first = 0
 	}
-	lines = append(lines, fmt.Sprintf("Hosts %d-%d of %d | Page %d/%d | n/p pages", first, end, len(rows), d.page+1, pages))
-	lines = append(lines, footer...)
+	footer = append([]string{fmt.Sprintf("Hosts %d-%d of %d | Page %d/%d | n/p pages", first, end, len(rows), d.page+1, pages)}, footer...)
+	lines = pinProgressFooter(lines, footer, height)
 	return finishProgress(lines, width, height, terminalHeight)
 }
 
@@ -253,4 +252,15 @@ func finishProgress(lines []string, width, height, terminalHeight int) string {
 		result += "\n"
 	}
 	return result
+}
+
+// The viewport occupies all remaining rows even when only one host is present.
+// Consequently the footer remains adjacent to the fixed command input row.
+func pinProgressFooter(header, footer []string, height int) []string {
+	available := max(0, height-len(footer))
+	lines := append([]string(nil), header[:min(len(header), available)]...)
+	for len(lines) < available {
+		lines = append(lines, "")
+	}
+	return append(lines, footer...)
 }

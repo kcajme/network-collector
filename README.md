@@ -41,6 +41,12 @@ for configuration management. The two can complement each other.
 
 ## Live operation progress
 
+Host rows stay at the top of the viewport. The host totals, page information,
+and menu are anchored at the bottom, directly above `Command>`, even when only
+one host is selected. Unused host rows remain blank; resizing moves the footer
+with the bottom edge of the terminal.
+
+
 The terminal menu has a dedicated `Command>` line. Typed text stays visible
 through timer refreshes and window resizes; there is no typing deadline. Press
 Enter to submit a command. Backspace/Delete, Left/Right, Home/End, Ctrl+A/Ctrl+E,
@@ -74,8 +80,10 @@ Each target has one row with its state, category, current step and time in that
 category. The timer refreshes every second. Steps without a category use an
 `Uncategorised` stage whose timer resets for each new step. Finished hosts move
 above active/queued hosts in completion order, newest completion last. The footer
-shows total, active, queued, remaining, successful, failed, not-run and cancelled
-host counts. Remaining means active plus queued. Timers freeze on completion.
+shows only `Started: 10/100 | Complete: 5 | Failed: 1`. Started counts each host
+once when it first enters ACTIVE, even after completion/failure or retries.
+Complete and Failed count current host outcomes; successful retry clears the
+host from Failed and adds it to Complete. Timers freeze on completion.
 
 Add an optional `category` label to any step in `config.yaml`:
 
