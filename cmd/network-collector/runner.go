@@ -131,6 +131,7 @@ func runSSHDeviceContext(runContext context.Context, index, occurrence int, devi
 		artifactPrefix:   fmt.Sprintf("schedule-%03d", occurrence+1),
 		factsDefaults:    config.Facts,
 		events:           events,
+		progress:         config.progress,
 		netconf:          netconfExecutor,
 		netconfPolicy:    netconfPolicy,
 		gnmi:             device.GNMI,

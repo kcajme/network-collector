@@ -39,6 +39,48 @@ your operational workflow; choose Ansible when you need its broader collections
 and [network resource modules](https://docs.ansible.com/projects/ansible/latest/network/user_guide/network_resource_modules.html)
 for configuration management. The two can complement each other.
 
+## Live operation progress
+
+Terminal runs now show an ASCII progress table instead of per-host console logs.
+Each target has one row with its state, category, current step and time in that
+category. The timer refreshes every second. Steps without a category use an
+`Uncategorised` stage whose timer resets for each new step. Finished hosts move
+above active/queued hosts in completion order, newest completion last. The footer
+shows total, active, queued, remaining, successful, failed, not-run and cancelled
+host counts. Remaining means active plus queued. Timers freeze on completion.
+
+Add an optional `category` label to any step in `config.yaml`:
+
+```yaml
+ssh:
+  - hostname: router-1
+    ip: 192.0.2.1
+    type: cisco_ios
+    steps:
+      - name: show-version
+        category: prechecks
+        cmd: show version
+      - name: wait-for-reboot
+        category: reboot
+        wait_seconds: 600
+```
+
+Categories are literal reporting metadata: they do not change command rendering,
+validation, scheduling, retry rules or execution order. A category on a workflow
+invocation or control step is inherited by its nested steps unless overridden.
+Category labels are included in `step.started` lifecycle events and explicit
+step labels in `--plan --json`, for downstream reporting. For parallel branches,
+the single host row shows the most recently started branch step; it is not a
+count of all active branches. Recurring runs reuse host rows for the latest
+occurrence; the footer counts host targets, not cumulative scheduled jobs.
+
+Per-host session logging remains unchanged. During the live view, operational
+messages go to a separate operation log in `session_logs/`; its path is printed
+when the run ends. Approval and RSA passcode prompts temporarily pause redraws.
+`--json`, redirected output, and `TERM=dumb` retain their existing output mode.
+Use `--progress=false` to turn off the live table and restore console output.
+`--lint` and `--plan` remain offline and do not start a display.
+
 ## Security
 
 See [`SECURITY.md`](SECURITY.md) to report vulnerabilities privately. Security

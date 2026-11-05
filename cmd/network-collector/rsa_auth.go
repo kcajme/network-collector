@@ -18,6 +18,7 @@ var rsaPasscodePromptPattern = regexp.MustCompile(`(?im)(password|passcode):\s?$
 // startup is deliberately cached by main for all initial device connections;
 // this prompt is only used after code intentionally tears down a live session.
 type rsaTokenAuth struct {
+	progress *progressDisplay
 	mu       sync.Mutex
 	username string
 	input    *os.File
@@ -31,6 +32,8 @@ func newRSATokenAuth(username string, input *os.File, output io.Writer) *rsaToke
 func (a *rsaTokenAuth) prompt() (string, string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	resumeDisplay := a.progress.pause()
+	defer resumeDisplay()
 	fmt.Fprintf(a.output, "SSH session closed; enter a fresh RSA passcode for %s: ", a.username)
 	// #nosec G115 -- os.File.Fd is an operating-system file descriptor and
 	// x/term requires that descriptor as int.

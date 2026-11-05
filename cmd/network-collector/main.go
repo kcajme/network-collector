@@ -28,6 +28,7 @@ func main() {
 	var cliCredsInput bool
 	var cliRSAToken bool
 	var prettyOut bool
+	var progressOut bool
 	var approveAll bool
 	var checkMode bool
 	var planMode bool
@@ -55,6 +56,7 @@ func main() {
 	flag.BoolVar(&cliFailOnFail, "fail-on-fail", false, "exit non-zero if any validation fails or errors")
 	flag.BoolVar(&cliCredsInput, "creds_input", false, "force interactive credentials (terminal runs prompt automatically when environment credentials are missing)")
 	flag.BoolVar(&cliRSAToken, "rsa-token", false, "use an interactive RSA passcode, reuse it for startup connections, and prompt again before reconnecting")
+	flag.BoolVar(&progressOut, "progress", true, "show live ASCII host progress in a terminal")
 	flag.BoolVar(&prettyOut, "pretty", false, "show a coloured human-readable run summary")
 	flag.BoolVar(&approveAll, "approve-all", false, "approve all manual workflow gates non-interactively")
 	flag.BoolVar(&checkMode, "check", false, "preview changes without applying them")
@@ -454,6 +456,30 @@ func main() {
 		approvals, approvalWriter = newApprovalInput(os.Stdin), os.Stdout
 	}
 
+	// Credentials and configuration are resolved before starting the live display.
+	// Machine JSON and redirected output retain their established format.
+	// #nosec G115 -- x/term requires an OS descriptor as int.
+	displayEnabled := progressOut && !jsonOut && term.IsTerminal(int(os.Stdout.Fd())) && os.Getenv("TERM") != "dumb"
+	previousLogger := slog.Default()
+	var operationLog *os.File
+	operationLogPath := ""
+	if displayEnabled {
+		var logErr error
+		operationLog, operationLogPath, logErr = openSessionLog("operation", config.NamePlaybook, runStarted)
+		if logErr != nil {
+			slog.Error("cannot open operation log", "error", logErr)
+			os.Exit(1)
+		}
+		slog.SetDefault(slog.New(slog.NewTextHandler(operationLog, nil)))
+		config.Output.ConsoleOutput = false
+		config.progress = newProgressDisplay(os.Stdout, devices)
+		events.sinks = append(events.sinks, config.progress)
+		if rsaAuth != nil {
+			rsaAuth.progress = config.progress
+		}
+		config.progress.start()
+	}
+
 	runner := func(occurrence, index int, device DeviceConfig) deviceRunResult {
 		state := variableStates[variableScopeKey(device.Hostname, device.IP)]
 		state.mu.Lock()
@@ -461,7 +487,7 @@ func main() {
 			state.cond.Wait()
 		}
 		credential := deviceCredentials[index]
-		result := runSSHDeviceContext(runContext, index, occurrence, device, config, credential.Username, credential.Password, rsaAuth, jsonOut, prettyOut, approveAll, approvals, approvalWriter, parsers, state.variables, runDir, events, journal, resumeCompleted)
+		result := runSSHDeviceContext(runContext, index, occurrence, device, config, credential.Username, credential.Password, rsaAuth, jsonOut || displayEnabled, prettyOut, approveAll, approvals, approvalWriter, parsers, state.variables, runDir, events, journal, resumeCompleted)
 		state.next++
 		state.cond.Broadcast()
 		state.mu.Unlock()
@@ -511,6 +537,11 @@ func main() {
 	}
 	events.emit(lifecycleEvent{Type: "run.completed", Failed: &failed, Data: eventData})
 	events.close()
+	if displayEnabled {
+		slog.SetDefault(previousLogger)
+		_ = operationLog.Close()
+		fmt.Printf("Operation log: %s\nPer-host logs: session_logs/\n", operationLogPath)
+	}
 	reportFailed := false
 	if config.Report.Enabled {
 		reportPath, reportErr := reporting.Generate(reporting.Config{
@@ -531,7 +562,7 @@ func main() {
 	if jsonOut {
 		out, _ := json.MarshalIndent(aggregated, "", "  ")
 		fmt.Println(string(out))
-	} else if prettyOut {
+	} else if prettyOut && !displayEnabled {
 		fmt.Print(renderPrettyResults(deviceResults, runFailed, time.Since(runStarted), prettyColourEnabled(os.Stdout)))
 	}
 

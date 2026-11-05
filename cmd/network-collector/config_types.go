@@ -43,6 +43,7 @@ type RegisterIntegerConfig struct {
 }
 
 type StepConfig struct {
+	Category        string                  `mapstructure:"category" yaml:"category"`
 	RegisterInteger *RegisterIntegerConfig  `mapstructure:"register_integer" yaml:"register_integer"`
 	Name            string                  `mapstructure:"name" yaml:"name"`
 	Message         string                  `mapstructure:"message" yaml:"message"`
@@ -267,6 +268,7 @@ type ValidationConfig struct {
 }
 
 type Config struct {
+	progress          *progressDisplay
 	Imports           []string                  `mapstructure:"imports" yaml:"imports"`
 	NamePlaybook      string                    `mapstructure:"name_playbook" yaml:"name_playbook"`
 	SecurityMode      string                    `mapstructure:"security_mode" yaml:"security_mode"`
@@ -461,6 +463,8 @@ var failureLogMu sync.Mutex
 var version = "dev"
 
 type stepExecutionContext struct {
+	progress         *progressDisplay
+	progressCategory string
 	runContext       context.Context
 	hostname         string
 	ip               string

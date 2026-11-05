@@ -173,6 +173,8 @@ func requestApproval(ctx *stepExecutionContext, config ApprovalConfig, stepName 
 	if ctx.approvalInput.expired {
 		return false, fmt.Errorf("approval input disabled after a previous timeout")
 	}
+	resumeDisplay := ctx.progress.pause()
+	defer resumeDisplay()
 	writer := ctx.approvalWriter
 	if writer == nil {
 		writer = io.Discard

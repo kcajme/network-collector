@@ -869,6 +869,8 @@ func executeBlock(ctx *stepExecutionContext, client **ssh.Client, config BlockCo
 }
 
 func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps []StepConfig, depth int) bool {
+	inheritedCategory := ctx.progressCategory
+	defer func() { ctx.progressCategory = inheritedCategory }()
 	stopDeviceSteps := false
 	for _, step := range steps {
 		if _, err := validateRegisterInteger(step); err != nil {
@@ -892,7 +894,11 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 			writeSessionf(ctx.sessionLog, "[step:%s] not started: run interrupted\n", stepName)
 			return true
 		}
-		ctx.events.emit(lifecycleEvent{Type: "step.started", Hostname: ctx.hostname, IP: ctx.ip, Step: stepName})
+		ctx.progressCategory = inheritedCategory
+		if strings.TrimSpace(step.Category) != "" {
+			ctx.progressCategory = strings.TrimSpace(step.Category)
+		}
+		ctx.events.emit(lifecycleEvent{Type: "step.started", Hostname: ctx.hostname, IP: ctx.ip, Step: stepName, Data: map[string]interface{}{"category": ctx.progressCategory}})
 
 		run, err := evaluateWhen(step.When, ctx.variables)
 		if err != nil {

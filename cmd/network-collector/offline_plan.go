@@ -31,6 +31,7 @@ type offlinePlanDevice struct {
 }
 
 type offlinePlanStep struct {
+	Category    string `json:"category,omitempty"`
 	Path        string `json:"path"`
 	Kind        string `json:"kind"`
 	Execution   string `json:"execution"`
@@ -78,7 +79,7 @@ func appendPlanSteps(result []offlinePlanStep, steps []StepConfig, workflows map
 			conditional, reason = true, "when condition"
 		}
 		kind := planStepKind(step)
-		result = append(result, offlinePlanStep{Path: path, Kind: kind, Execution: planStepExecution(step), Conditional: conditional, Reason: reason})
+		result = append(result, offlinePlanStep{Category: step.Category, Path: path, Kind: kind, Execution: planStepExecution(step), Conditional: conditional, Reason: reason})
 
 		if use := strings.TrimSpace(step.Use); use != "" {
 			if workflow, ok := workflows[use]; ok {
@@ -190,7 +191,8 @@ func renderOfflinePlan(plan offlinePlan) string {
 func networkCollectorSchema() map[string]interface{} {
 	step := map[string]interface{}{
 		"type": "object", "properties": map[string]interface{}{
-			"name": map[string]string{"type": "string"}, "cmd": map[string]string{"type": "string"}, "parser": map[string]string{"type": "string"},
+			"category": map[string]string{"type": "string"},
+			"name":     map[string]string{"type": "string"}, "cmd": map[string]string{"type": "string"}, "parser": map[string]string{"type": "string"},
 			"register_integer": map[string]interface{}{"$ref": "#/$defs/register_integer"},
 			"message":          map[string]string{"type": "string"}, "register": map[string]string{"type": "string"}, "when": map[string]interface{}{"$ref": "#/$defs/when"},
 			"wait_seconds": map[string]interface{}{"type": "integer", "minimum": 0}, "ssh_probe": map[string]interface{}{"$ref": "#/$defs/ssh_probe"},
