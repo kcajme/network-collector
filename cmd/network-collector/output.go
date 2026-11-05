@@ -254,7 +254,7 @@ func openSessionLog(hostname, playbookName string, started time.Time) (*os.File,
 		return nil, "", err
 	}
 
-	filename := fmt.Sprintf("%s_%s.log", sanitizeLogName(hostname), started.Format("20060102_150405"))
+	filename := fmt.Sprintf("%s_%s.log", sanitizeLogName(hostname), started.Format("20060102_150405.000000000"))
 	path := "session_logs/" + filename
 	file, err := secureartifact.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 	if err != nil {

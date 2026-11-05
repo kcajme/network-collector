@@ -268,6 +268,7 @@ type ValidationConfig struct {
 }
 
 type Config struct {
+	checkpoints       map[string]*hostCheckpoint
 	progress          *progressDisplay
 	Imports           []string                  `mapstructure:"imports" yaml:"imports"`
 	NamePlaybook      string                    `mapstructure:"name_playbook" yaml:"name_playbook"`
@@ -463,6 +464,7 @@ var failureLogMu sync.Mutex
 var version = "dev"
 
 type stepExecutionContext struct {
+	checkpoint       *hostCheckpoint
 	progress         *progressDisplay
 	progressCategory string
 	runContext       context.Context

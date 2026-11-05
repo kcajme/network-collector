@@ -32,6 +32,10 @@ func runSSHDevice(index, occurrence int, device DeviceConfig, config Config, use
 
 func runSSHDeviceContext(runContext context.Context, index, occurrence int, device DeviceConfig, config Config, username, password string, rsaAuth *rsaTokenAuth, jsonOut, pretty, approveAll bool, approvals *approvalInput, approvalWriter io.Writer, parsers map[string]ParserModuleConfig, variables map[string]string, runDir string, events *eventDispatcher, journal *runJournal, resumeCompleted map[string]bool) (result deviceRunResult) {
 	startedAt := time.Now()
+	checkpoint := config.checkpoints[variableScopeKey(device.Hostname, device.IP)]
+	if checkpoint != nil {
+		checkpoint.attempt++
+	}
 	hostname := strings.TrimSpace(device.Hostname)
 	ip := strings.TrimSpace(device.IP)
 	result = deviceRunResult{index: index, hostname: hostname, ip: ip}
@@ -69,6 +73,12 @@ func runSSHDeviceContext(runContext context.Context, index, occurrence int, devi
 			slog.Error("error writing failure log", "hostname", hostname, "ip", ip, "error", err)
 		}
 		return result
+	}
+
+	if checkpoint != nil {
+		checkpoint.remaining = steps
+		checkpoint.before = cloneVariables(variables)
+		checkpoint.blocked = ""
 	}
 
 	started := time.Now()
@@ -135,6 +145,7 @@ func runSSHDeviceContext(runContext context.Context, index, occurrence int, devi
 		factsDefaults:    config.Facts,
 		events:           events,
 		progress:         config.progress,
+		checkpoint:       checkpoint,
 		netconf:          netconfExecutor,
 		netconfPolicy:    netconfPolicy,
 		gnmi:             device.GNMI,
@@ -144,6 +155,9 @@ func runSSHDeviceContext(runContext context.Context, index, occurrence int, devi
 		journal:          journal,
 		occurrence:       occurrence,
 		resumeCompleted:  resumeCompleted,
+	}
+	if checkpoint != nil {
+		ctx.artifactPrefix += fmt.Sprintf(".session-attempt-%03d", checkpoint.attempt)
 	}
 	if rsaAuth != nil {
 		ctx.reauthenticate = rsaAuth.prompt

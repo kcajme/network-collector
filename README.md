@@ -81,6 +81,38 @@ when the run ends. Approval and RSA passcode prompts temporarily pause redraws.
 Use `--progress=false` to turn off the live table and restore console output.
 `--lint` and `--plan` remain offline and do not start a display.
 
+
+When all jobs finish, the terminal app stays open until you exit with `q` and
+confirm with `y`. Completed/failed rows and frozen stage timers remain visible.
+This idle behavior applies only when the interactive menu is available; JSON,
+redirected and `--progress=false` runs still finish automatically.
+
+After the current jobs finish, type `r <ID>` (for example `r 2`) and Enter to
+retry a failed host, then confirm with `y`. IDs are stable even when rows move.
+Interactive runs stop a host at its first unrecovered top-level failure. The
+checkpoint retains the remaining steps and the variables from immediately
+before that step. A retry opens a new connection and starts at the failed step;
+previous successful steps are not replayed. If it succeeds, subsequent steps
+continue normally. A further failure creates the next checkpoint. The session
+stays open after successful retries too. Other completed hosts are not rerun.
+
+Retry confirmation is required because a transport error does not prove the
+remote command failed: verify device state before repeating an upgrade or
+activation. Retries use the same configured credentials (a fresh RSA passcode
+is requested when applicable). Every attempt gets separate session logs and
+artifact prefixes; earlier evidence remains available. Final summaries/reports
+are written when the session is exited; successful retries mark earlier failed
+validation records recovered while preserving their history.
+
+Exact interactive retry currently supports sequential top-level steps and
+connection failures. Failures inside workflow calls, loops, parallel/control
+blocks, gNMI triggers, or validation actions are explicitly unavailable rather
+than replaying their enclosing operations. Recurring jobs and duplicate host
+targets also disable interactive retry. Checkpoints are in memory for this
+session only; restarting the app still uses the separate audited `--resume`
+workflow. Hosts not started because of a canary/failure threshold are marked
+`NOT RUN`; retry does not automatically launch them.
+
 While the terminal menu is available, Ctrl+C does not quit the application.
 Type `h` then Enter to toggle help. Type `q` (or `quit`/`stop`) then Enter,
 then `y` and Enter to confirm stopping the entire operation; any other response

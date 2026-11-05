@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,25 +24,31 @@ type progressHost struct {
 // progressDisplay consumes the same lifecycle events as disk/report sinks.
 // It never receives command output, credentials or validation payloads.
 type progressDisplay struct {
-	input         *os.File
-	requestStop   func()
-	confirmStop   bool
-	help          bool
-	stopping      bool
-	commandBuffer []byte
-	mu            sync.Mutex
-	writer        io.Writer
-	hosts         map[string]*progressHost
-	order         []string
-	sequence      int
-	paused        int
-	closed        bool
-	done          chan struct{}
-	stopped       chan struct{}
+	idle              bool
+	retryDescriptions map[string]string
+	retryEnabled      map[string]bool
+	pendingRetry      string
+	notice            string
+	requests          chan sessionRequest
+	input             *os.File
+	requestStop       func()
+	confirmStop       bool
+	help              bool
+	stopping          bool
+	commandBuffer     []byte
+	mu                sync.Mutex
+	writer            io.Writer
+	hosts             map[string]*progressHost
+	order             []string
+	sequence          int
+	paused            int
+	closed            bool
+	done              chan struct{}
+	stopped           chan struct{}
 }
 
 func newProgressDisplay(writer io.Writer, devices []DeviceConfig) *progressDisplay {
-	d := &progressDisplay{writer: writer, hosts: map[string]*progressHost{}, done: make(chan struct{}), stopped: make(chan struct{})}
+	d := &progressDisplay{requests: make(chan sessionRequest, 1), writer: writer, hosts: map[string]*progressHost{}, done: make(chan struct{}), stopped: make(chan struct{})}
 	for _, device := range devices {
 		key := variableScopeKey(device.Hostname, device.IP)
 		if _, ok := d.hosts[key]; ok {
@@ -174,7 +181,7 @@ func (d *progressDisplay) render(now time.Time) string {
 	})
 	var out strings.Builder
 	fmt.Fprintln(&out, "NETWORK COLLECTOR - operation progress")
-	fmt.Fprintln(&out, "HOST               STATE     CATEGORY       STEP                 STAGE TIME")
+	fmt.Fprintln(&out, "ID  HOST               STATE     CATEGORY       STEP                 STAGE TIME")
 	fmt.Fprintln(&out, strings.Repeat("-", 78))
 	counts := map[string]int{}
 	for _, key := range rows {
@@ -187,18 +194,38 @@ func (d *progressDisplay) render(now time.Time) string {
 				elapsed = h.ended.Sub(h.since).Truncate(time.Second).String()
 			}
 		}
-		fmt.Fprintf(&out, "%s %s %s %s %s\n", progressText(h.name, 18), progressText(h.state, 9), progressText(h.category, 14), progressText(h.step, 20), elapsed)
+		id := 0
+		for index, k := range d.order {
+			if k == key {
+				id = index + 1
+				break
+			}
+		}
+		fmt.Fprintf(&out, "%3d %s %s %s %s %s\n", id, progressText(h.name, 18), progressText(h.state, 9), progressText(h.category, 14), progressText(h.step, 20), elapsed)
 	}
 	fmt.Fprintln(&out, strings.Repeat("-", 78))
 	fmt.Fprintf(&out, "Total: %d | Active: %d | Queued: %d | Remaining: %d\n", len(rows), counts["ACTIVE"], counts["QUEUED"], counts["ACTIVE"]+counts["QUEUED"])
 	fmt.Fprintf(&out, "Done: %d | Failed: %d | Not run: %d | Cancelled: %d\n", counts["DONE"], counts["FAILED"], counts["NOT RUN"], counts["CANCELLED"])
 	if !d.closed {
-		if d.stopping {
+		if d.pendingRetry != "" {
+			fmt.Fprintln(&out, d.retryDescriptions[d.pendingRetry])
+		} else if d.stopping {
 			fmt.Fprintln(&out, "Stopping operation... closing local work.")
 		} else if d.confirmStop {
-			fmt.Fprintln(&out, "Stop this operation? Enter y to stop, or n to continue.")
+			if d.idle {
+				fmt.Fprintln(&out, "Exit application? Enter y to exit, or n to stay.")
+			} else {
+				fmt.Fprintln(&out, "Stop this operation? Enter y to stop, or n to continue.")
+			}
 		} else if d.input != nil {
-			fmt.Fprintln(&out, "Commands: q + Enter = stop | h + Enter = help")
+			if d.idle {
+				fmt.Fprintln(&out, "Jobs finished. Commands: r <ID> = retry failed host | q = exit | h = help")
+			} else {
+				fmt.Fprintln(&out, "Commands: q + Enter = stop | h + Enter = help")
+			}
+			if d.notice != "" {
+				fmt.Fprintln(&out, d.notice)
+			}
 		}
 		if d.help {
 			fmt.Fprintln(&out, "Stopping cancels local work; it does not roll back changes already sent.")
@@ -273,11 +300,24 @@ func (d *progressDisplay) handleCommand(command string) {
 		return
 	}
 	command = strings.ToLower(command)
+	if d.pendingRetry != "" {
+		host := d.pendingRetry
+		d.pendingRetry = ""
+		if command == "y" || command == "yes" {
+			d.idle = false
+			d.notice = ""
+			d.requests <- sessionRequest{host: host}
+		}
+		d.draw(time.Now())
+		return
+	}
 	if d.confirmStop {
 		d.confirmStop = false
 		if command == "y" || command == "yes" {
 			d.stopping = true
-			if d.requestStop != nil {
+			if d.idle {
+				d.requests <- sessionRequest{quit: true}
+			} else if d.requestStop != nil {
 				d.requestStop()
 			}
 		}
@@ -287,6 +327,44 @@ func (d *progressDisplay) handleCommand(command string) {
 			d.confirmStop = true
 		case "h", "help", "?":
 			d.help = !d.help
+		default:
+			fields := strings.Fields(command)
+			if len(fields) == 2 && (fields[0] == "r" || fields[0] == "retry") {
+				id, err := strconv.Atoi(fields[1])
+				if !d.idle {
+					d.notice = "Wait until current jobs finish before retrying a host."
+				} else if err != nil || id < 1 || id > len(d.order) {
+					d.notice = "Choose a host ID shown in the table."
+				} else {
+					key := d.order[id-1]
+					if d.retryEnabled[key] {
+						d.pendingRetry = key
+						d.notice = ""
+					} else {
+						d.notice = d.retryDescriptions[key]
+						if d.notice == "" {
+							d.notice = "Only failed hosts with checkpoints can be retried."
+						}
+					}
+				}
+			}
+		}
+	}
+	d.draw(time.Now())
+}
+
+func (d *progressDisplay) readyForRetries(descriptions map[string]string, enabled map[string]bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.idle = true
+	d.retryDescriptions = descriptions
+	d.retryEnabled = enabled
+	for _, h := range d.hosts {
+		if h.state == "QUEUED" {
+			h.state = "NOT RUN"
+			d.sequence++
+			h.completed = d.sequence
+			h.ended = time.Now()
 		}
 	}
 	d.draw(time.Now())

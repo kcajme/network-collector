@@ -463,6 +463,12 @@ func main() {
 	previousLogger := slog.Default()
 	var operationLog *os.File
 	operationLogPath := ""
+	if menuEnabled {
+		config.checkpoints = map[string]*hostCheckpoint{}
+		for _, device := range devices {
+			config.checkpoints[variableScopeKey(device.Hostname, device.IP)] = &hostCheckpoint{}
+		}
+	}
 	if displayEnabled {
 		var logErr error
 		operationLog, operationLogPath, logErr = openSessionLog("operation", config.NamePlaybook, runStarted)
@@ -502,6 +508,29 @@ func main() {
 		return result
 	}
 	deviceResults, schedulingStopped := runRecurringScheduleContext(runContext, devices, config.Execution, config.Schedule, runner, time.Sleep)
+	if menuEnabled && runContext.Err() == nil {
+		deviceResults = waitForSessionActions(runContext, config.progress, devices, config.checkpoints, deviceResults, config.Schedule.Count > 1,
+			func(index int, device DeviceConfig, variables map[string]string) deviceRunResult {
+				key := variableScopeKey(device.Hostname, device.IP)
+				variableStates[key].variables = variables
+				credential := deviceCredentials[index]
+				if rsaAuth != nil {
+					user, password, promptErr := rsaAuth.prompt()
+					if promptErr != nil {
+						slog.Error("retry passcode prompt failed", "hostname", device.Hostname, "error", promptErr)
+						return deviceRunResult{index: index, hostname: device.Hostname, ip: device.IP, failed: true}
+					}
+					credential.Username = user
+					credential.Password = password
+				}
+				events.emit(lifecycleEvent{Type: "device.retry.confirmed", Hostname: device.Hostname, IP: device.IP})
+				return runSSHDeviceContext(runContext, index, 0, device, config, credential.Username, credential.Password, rsaAuth, true, prettyOut, approveAll, approvals, approvalWriter, parsers, variables, runDir, events, journal, nil)
+			})
+	}
+	if menuEnabled && config.Schedule.Count <= 1 && len(deviceResults) == len(devices) {
+		schedulingStopped = false
+	}
+
 	occurrences := config.Schedule.Count
 	if occurrences == 0 {
 		occurrences = 1

@@ -26,12 +26,12 @@ Rebuild from the repository root with Go 1.27.3:
 
 ```sh
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOAMD64=v1 GOFLAGS=-mod=readonly \
-  go build -trimpath -ldflags="-s -w -X main.version=$(cat VERSION)-menu" \
+  go build -trimpath -ldflags="-s -w -X main.version=$(cat VERSION)-session" \
   -o bin/linux-amd64/network-collector ./cmd/network-collector
 (cd bin/linux-amd64 && sha256sum network-collector > SHA256SUMS)
 ```
 
-This build reports `2.0.2-menu` and supports the bounded
+This build reports `2.0.2-session` and supports the bounded
 `register_integer` capture documented in the repository README.
 
 Terminal runs prompt automatically when environment credentials are incomplete.
@@ -41,3 +41,6 @@ This build adds the live host progress table and optional step `category` labels
 
 Use `q` then Enter and confirm with `y` then Enter to quit the live menu.
 Ctrl+C is ignored while the terminal menu is available.
+
+The menu stays open after jobs finish. Use `r <ID>` to retry an eligible failed
+host from its in-memory checkpoint, or `q` and confirm to exit.

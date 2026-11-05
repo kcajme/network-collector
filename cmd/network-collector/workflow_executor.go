@@ -874,6 +874,9 @@ func executeBlock(ctx *stepExecutionContext, client **ssh.Client, config BlockCo
 }
 
 func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps []StepConfig, depth int) bool {
+	if ctx.checkpoint != nil && depth == 0 {
+		return executeCheckpointedSteps(ctx, client, steps)
+	}
 	inheritedCategory := ctx.progressCategory
 	defer func() { ctx.progressCategory = inheritedCategory }()
 	stopDeviceSteps := false
