@@ -665,7 +665,7 @@ Keep only host names and addresses in `inventory.yaml`. Groups are optional;
 they are not needed for a shared workflow.
 
 ```yaml
-host:
+hosts:
   - name: router-01
     ip: 192.0.2.10
   - name: router-02
@@ -692,8 +692,8 @@ when the inventory contains only names and IPs. Empty inventories and missing
 drivers are rejected. Inline `hostname`/`ip` entries and explicit `host`/`hosts`
 selectors retain their existing scope and are not expanded to all hosts.
 
-Both `host:` and the existing `hosts:` list spelling are accepted in inventory
-files; use one, not both. Existing optional host settings and `group`/`groups`
+Use the standard `hosts:` key for the inventory list. Singular `host:` at the
+inventory root is rejected with a clear error. Existing optional host settings and `group`/`groups`
 selectors remain supported for advanced/older playbooks. The checked-in mixed
 platform examples retain explicit host selectors with drivers in `config.yaml`;
 see `examples/simple-inventory/` for the shared, selector-free form.

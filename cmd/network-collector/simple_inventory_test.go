@@ -7,10 +7,10 @@ import (
 	"testing"
 )
 
-func TestSimpleHostInventoryExpandsSharedWorkflowInOrder(t *testing.T) {
+func TestSimpleHostsInventoryExpandsSharedWorkflowInOrder(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(filepath.Join(dir, "inventory.yaml"), []byte("host:\n  - name: router-b\n    ip: 192.0.2.2\n  - name: router-a\n    ip: 192.0.2.1\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "inventory.yaml"), []byte("hosts:\n  - name: router-b\n    ip: 192.0.2.2\n  - name: router-a\n    ip: 192.0.2.1\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	inventory, err := loadInventory("inventory.yaml", configPath)
@@ -45,12 +45,16 @@ func TestSimpleSharedWorkflowRejectsEmptyInventoryAndMissingDriver(t *testing.T)
 	}
 }
 
-func TestInventoryRejectsBothHostListSpellings(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "inventory.yaml")
-	os.WriteFile(path, []byte("host: []\nhosts: []\n"), 0600)
-	_, err := loadInventory(path, "")
-	if err == nil || !strings.Contains(err.Error(), "not both") {
-		t.Fatalf("ambiguous inventory not rejected: %v", err)
+func TestInventoryRequiresStandardHostsKey(t *testing.T) {
+	for _, content := range []string{"host: []\n", "host: []\nhosts: []\n", "host:\n  - name: router-01\n    ip: 192.0.2.1\n"} {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "inventory.yaml")
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := loadInventory(path, "")
+		if err == nil || !strings.Contains(err.Error(), "must use hosts:") {
+			t.Fatalf("singular inventory host list not rejected clearly: %v", err)
+		}
 	}
 }

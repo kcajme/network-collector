@@ -124,13 +124,10 @@ func loadInventory(inventoryFile, configFile string) (*InventoryConfig, error) {
 	if err := safeyaml.Unmarshal(b, &inventory); err != nil {
 		return nil, err
 	}
-	if inventory.Host != nil && inventory.Hosts != nil {
-		return nil, fmt.Errorf("inventory must use either host: or hosts:, not both")
+	if inventory.SingularHostList != nil {
+		return nil, fmt.Errorf("inventory host list must use hosts:, not host:")
 	}
-	if inventory.Host != nil {
-		inventory.Hosts = inventory.Host
-		inventory.Host = nil
-	}
+
 	inventory.baseDir = filepath.Dir(path)
 	for index := range inventory.Hosts {
 		resolveGNMICertificatePaths(inventory.Hosts[index].GNMI, inventory.baseDir)

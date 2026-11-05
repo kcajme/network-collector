@@ -1,4 +1,4 @@
-host:
+hosts:
   - name: device-nxos-01
     ip: 192.0.2.4
   - name: device-qfx-01

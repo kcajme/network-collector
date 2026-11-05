@@ -386,10 +386,10 @@ type InventoryGroupConfig struct {
 }
 
 type InventoryConfig struct {
-	Host    []InventoryHostConfig           `yaml:"host"`
-	Hosts   []InventoryHostConfig           `yaml:"hosts"`
-	Groups  map[string]InventoryGroupConfig `yaml:"groups"`
-	baseDir string
+	SingularHostList interface{}                     `yaml:"host"`
+	Hosts            []InventoryHostConfig           `yaml:"hosts"`
+	Groups           map[string]InventoryGroupConfig `yaml:"groups"`
+	baseDir          string
 }
 
 type ParserFieldConfig struct {
