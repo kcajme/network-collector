@@ -108,6 +108,14 @@ To build from source instead:
     export NET_PASSWORD=<your password>
     ```
 
+When running `network-collector` in a terminal with the default/environment
+credential provider, it automatically prompts once for a username and hidden
+password if either `NET_USER` or `NET_PASSWORD` is missing or blank. Complete
+environment credentials and configured file/Vault/1Password/CyberArk providers
+continue to work without a prompt. Noninteractive runs do not automatically
+prompt; provide credentials through the configured provider or environment.
+Offline `--lint` and `--plan` modes never prompt.
+
 Alternatively, pass `--creds_input` to any of the built commands to be
     prompted for a username and password. Interactive input overrides any
     credentials already set in the environment, and password entry is hidden:

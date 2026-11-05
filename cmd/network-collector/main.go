@@ -53,7 +53,7 @@ func main() {
 	flag.BoolVar(&jsonOut, "json", false, "emit machine-readable JSON only")
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.BoolVar(&cliFailOnFail, "fail-on-fail", false, "exit non-zero if any validation fails or errors")
-	flag.BoolVar(&cliCredsInput, "creds_input", false, "prompt for username and password interactively")
+	flag.BoolVar(&cliCredsInput, "creds_input", false, "force interactive credentials (terminal runs prompt automatically when environment credentials are missing)")
 	flag.BoolVar(&cliRSAToken, "rsa-token", false, "use an interactive RSA passcode, reuse it for startup connections, and prompt again before reconnecting")
 	flag.BoolVar(&prettyOut, "pretty", false, "show a coloured human-readable run summary")
 	flag.BoolVar(&approveAll, "approve-all", false, "approve all manual workflow gates non-interactively")
@@ -301,10 +301,9 @@ func main() {
 	deviceCredentials := make([]credentials.Credentials, len(devices))
 	var rsaAuth *rsaTokenAuth
 	if len(devices) > 0 {
-		providerType := config.Credentials.Provider
-		if cliCredsInput || rsaToken {
-			providerType = "interactive"
-		}
+		// #nosec G115 -- x/term requires the OS file descriptor as int.
+		providerType := selectCredentialProvider(config.Credentials.Provider, cliCredsInput || rsaToken,
+			term.IsTerminal(int(os.Stdin.Fd())), os.Getenv("NET_USER"), os.Getenv("NET_PASSWORD"))
 		credentialFile := strings.TrimSpace(config.Credentials.File)
 		if credentialFile != "" && !filepath.IsAbs(credentialFile) {
 			credentialFile = filepath.Join(filepath.Dir(configFile), credentialFile)
