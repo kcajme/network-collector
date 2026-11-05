@@ -1339,6 +1339,10 @@ ssh:
           expected: 14
           expected_type: int
         register: install_id
+        register_integer:
+          pattern: 'Install ID:\s+(\d+)'
+          min: 1
+          max: 2147483647
 
       - name: wait-for-install-state
         wait_seconds: 30
@@ -1976,6 +1980,39 @@ interpolation into SSH commands, validation action commands, NETCONF fields,
 declarative ensure fields, or workflow parameters that reach those executable
 sinks. This prevents a malicious device response containing newlines or CLI/XML
 syntax from becoming executable intent.
+
+To use a device-generated numeric operation ID in an SSH command, explicitly
+capture it with `register_integer` instead of trusting an ordinary registration:
+
+```yaml
+- name: install-add-source
+  cmd: 'install add source harddisk:/ YOUR-IMAGE.tar'
+  register: install_id
+  register_integer:
+    pattern: 'Install operation\s+(\d+)'
+    min: 1
+    max: 2147483647
+
+- name: install-activate-id
+  cmd: 'install activate id {{install_id}} sync'
+```
+
+The regex must contain exactly one capture group and match exactly once. The
+capture must be 1–10 ASCII decimal digits within the explicit inclusive bounds
+(`0 <= min <= max <= 2147483647`). The stored value is canonical decimal text;
+signs, whitespace, Unicode digits, and CLI syntax are rejected. Capture errors
+stop the device's remaining steps, regardless of `fail_on_fail`, and cannot
+reuse an earlier ID. Ordinary validation extraction cannot overwrite this value.
+`expected_type: int` alone does not enable command interpolation.
+
+`register_integer` is supported on SSH command steps without `retry` or other
+control/transport fields. Retry status checks, not commands initiating upgrades.
+Its value can be used in SSH commands (including validation action commands),
+messages and validations; it remains blocked in NETCONF and declarative ensure
+fields. The capture pattern and bounds are static playbook configuration. As
+with any device output, a numeric ID is not proof of operation success: retain
+appropriate completion/status checks before activation. Adapt the install syntax
+to the target platform. No manual ID entry is needed.
 
 Ordinary SSH, NETCONF, ensure, and facts steps retain at most 10 MiB of device
 output by default. Set step-level `max_output_bytes` to a smaller limit or,

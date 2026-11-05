@@ -191,7 +191,8 @@ func networkCollectorSchema() map[string]interface{} {
 	step := map[string]interface{}{
 		"type": "object", "properties": map[string]interface{}{
 			"name": map[string]string{"type": "string"}, "cmd": map[string]string{"type": "string"}, "parser": map[string]string{"type": "string"},
-			"message": map[string]string{"type": "string"}, "register": map[string]string{"type": "string"}, "when": map[string]interface{}{"$ref": "#/$defs/when"},
+			"register_integer": map[string]interface{}{"$ref": "#/$defs/register_integer"},
+			"message":          map[string]string{"type": "string"}, "register": map[string]string{"type": "string"}, "when": map[string]interface{}{"$ref": "#/$defs/when"},
 			"wait_seconds": map[string]interface{}{"type": "integer", "minimum": 0}, "ssh_probe": map[string]interface{}{"$ref": "#/$defs/ssh_probe"},
 			"approval": map[string]interface{}{"$ref": "#/$defs/approval"}, "validation": map[string]interface{}{"$ref": "#/$defs/validation"},
 			"steps": map[string]interface{}{"type": "array", "items": map[string]interface{}{"$ref": "#/$defs/step"}},
@@ -215,6 +216,11 @@ func networkCollectorSchema() map[string]interface{} {
 			"workflows": map[string]interface{}{"type": "object", "additionalProperties": map[string]interface{}{"$ref": "#/$defs/workflow"}},
 		},
 		"$defs": map[string]interface{}{
+			"register_integer": map[string]interface{}{"type": "object", "required": []string{"pattern", "min", "max"}, "additionalProperties": false, "properties": map[string]interface{}{
+				"pattern": map[string]string{"type": "string"},
+				"min":     map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 2147483647},
+				"max":     map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 2147483647},
+			}},
 			"device":   map[string]interface{}{"type": "object", "properties": map[string]interface{}{"hostname": map[string]string{"type": "string"}, "ip": map[string]string{"type": "string"}, "type": map[string]string{"type": "string"}, "groups": map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}}, "steps": map[string]interface{}{"type": "array", "items": map[string]interface{}{"$ref": "#/$defs/step"}}, "cmd": map[string]string{"type": "string"}, "ssh_security": map[string]interface{}{"$ref": "#/$defs/ssh_security"}}},
 			"workflow": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"parameters": map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}}, "steps": map[string]interface{}{"type": "array", "items": map[string]interface{}{"$ref": "#/$defs/step"}}}},
 			"step":     step, "when": map[string]interface{}{"type": "object", "required": []string{"variable", "condition"}, "properties": map[string]interface{}{"variable": map[string]string{"type": "string"}, "condition": map[string]string{"type": "string"}, "expected": map[string]interface{}{}}},

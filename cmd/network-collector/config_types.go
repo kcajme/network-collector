@@ -36,37 +36,44 @@ type ValidationActionConfig struct {
 	MaxOutputBytes int               `mapstructure:"max_output_bytes" yaml:"max_output_bytes"`
 }
 
+type RegisterIntegerConfig struct {
+	Pattern string `mapstructure:"pattern" yaml:"pattern"`
+	Min     *int64 `mapstructure:"min" yaml:"min"`
+	Max     *int64 `mapstructure:"max" yaml:"max"`
+}
+
 type StepConfig struct {
-	Name           string                  `mapstructure:"name" yaml:"name"`
-	Message        string                  `mapstructure:"message" yaml:"message"`
-	Command        string                  `mapstructure:"cmd" yaml:"cmd"`
-	Parser         string                  `mapstructure:"parser" yaml:"parser"`
-	Enrich         *EnrichmentConfig       `mapstructure:"enrich" yaml:"enrich"`
-	WaitSeconds    int                     `mapstructure:"wait_seconds" yaml:"wait_seconds"`
-	ReturnToPrompt *bool                   `mapstructure:"return_to_prompt" yaml:"return_to_prompt"`
-	SSHProbe       *SSHProbeConfig         `mapstructure:"ssh_probe" yaml:"ssh_probe"`
-	RemovedLocal   interface{}             `mapstructure:"local" yaml:"local"`
-	Validation     *ValidationConfig       `mapstructure:"validation" yaml:"validation"`
-	Validations    []ValidationConfig      `mapstructure:"validations" yaml:"validations"`
-	Retry          *RetryConfig            `mapstructure:"retry" yaml:"retry"`
-	Register       string                  `mapstructure:"register" yaml:"register"`
-	MaxOutputBytes int                     `mapstructure:"max_output_bytes" yaml:"max_output_bytes"`
-	OnPass         *ValidationActionConfig `mapstructure:"on_pass" yaml:"on_pass"`
-	OnFail         *ValidationActionConfig `mapstructure:"on_fail" yaml:"on_fail"`
-	Output         *StepOutputConfig       `mapstructure:"output" yaml:"output"`
-	Repeat         *RepeatConfig           `mapstructure:"repeat" yaml:"repeat"`
-	When           *WhenConfig             `mapstructure:"when" yaml:"when"`
-	Foreach        *ForeachConfig          `mapstructure:"foreach" yaml:"foreach"`
-	Use            string                  `mapstructure:"use" yaml:"use"`
-	With           map[string]interface{}  `mapstructure:"with" yaml:"with"`
-	Block          *BlockConfig            `mapstructure:"block" yaml:"block"`
-	Approval       *ApprovalConfig         `mapstructure:"approval" yaml:"approval"`
-	Parallel       *ParallelConfig         `mapstructure:"parallel" yaml:"parallel"`
-	Facts          *FactsConfig            `mapstructure:"facts" yaml:"facts"`
-	Drift          *DriftConfig            `mapstructure:"drift" yaml:"drift"`
-	GNMISubscribe  *GNMISubscribeConfig    `mapstructure:"gnmi_subscribe" yaml:"gnmi_subscribe"`
-	NETCONF        *NETCONFStepConfig      `mapstructure:"netconf" yaml:"netconf"`
-	Ensure         *EnsureConfig           `mapstructure:"ensure" yaml:"ensure"`
+	RegisterInteger *RegisterIntegerConfig  `mapstructure:"register_integer" yaml:"register_integer"`
+	Name            string                  `mapstructure:"name" yaml:"name"`
+	Message         string                  `mapstructure:"message" yaml:"message"`
+	Command         string                  `mapstructure:"cmd" yaml:"cmd"`
+	Parser          string                  `mapstructure:"parser" yaml:"parser"`
+	Enrich          *EnrichmentConfig       `mapstructure:"enrich" yaml:"enrich"`
+	WaitSeconds     int                     `mapstructure:"wait_seconds" yaml:"wait_seconds"`
+	ReturnToPrompt  *bool                   `mapstructure:"return_to_prompt" yaml:"return_to_prompt"`
+	SSHProbe        *SSHProbeConfig         `mapstructure:"ssh_probe" yaml:"ssh_probe"`
+	RemovedLocal    interface{}             `mapstructure:"local" yaml:"local"`
+	Validation      *ValidationConfig       `mapstructure:"validation" yaml:"validation"`
+	Validations     []ValidationConfig      `mapstructure:"validations" yaml:"validations"`
+	Retry           *RetryConfig            `mapstructure:"retry" yaml:"retry"`
+	Register        string                  `mapstructure:"register" yaml:"register"`
+	MaxOutputBytes  int                     `mapstructure:"max_output_bytes" yaml:"max_output_bytes"`
+	OnPass          *ValidationActionConfig `mapstructure:"on_pass" yaml:"on_pass"`
+	OnFail          *ValidationActionConfig `mapstructure:"on_fail" yaml:"on_fail"`
+	Output          *StepOutputConfig       `mapstructure:"output" yaml:"output"`
+	Repeat          *RepeatConfig           `mapstructure:"repeat" yaml:"repeat"`
+	When            *WhenConfig             `mapstructure:"when" yaml:"when"`
+	Foreach         *ForeachConfig          `mapstructure:"foreach" yaml:"foreach"`
+	Use             string                  `mapstructure:"use" yaml:"use"`
+	With            map[string]interface{}  `mapstructure:"with" yaml:"with"`
+	Block           *BlockConfig            `mapstructure:"block" yaml:"block"`
+	Approval        *ApprovalConfig         `mapstructure:"approval" yaml:"approval"`
+	Parallel        *ParallelConfig         `mapstructure:"parallel" yaml:"parallel"`
+	Facts           *FactsConfig            `mapstructure:"facts" yaml:"facts"`
+	Drift           *DriftConfig            `mapstructure:"drift" yaml:"drift"`
+	GNMISubscribe   *GNMISubscribeConfig    `mapstructure:"gnmi_subscribe" yaml:"gnmi_subscribe"`
+	NETCONF         *NETCONFStepConfig      `mapstructure:"netconf" yaml:"netconf"`
+	Ensure          *EnsureConfig           `mapstructure:"ensure" yaml:"ensure"`
 }
 
 type EnsureConfig struct {

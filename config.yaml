@@ -68,6 +68,10 @@ ssh:
           expected: 14
           expected_type: int
         register: install_id
+        register_integer:
+          pattern: 'Install ID:\s+(\d+)'
+          min: 1
+          max: 2147483647
 
       - name: show-install-by-id
         cmd: 'show install active {{install_id}}'

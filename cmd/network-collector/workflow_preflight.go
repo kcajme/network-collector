@@ -9,6 +9,7 @@ type preflightVariable struct {
 	value   string
 	dynamic bool
 	tainted bool
+	integer bool
 }
 
 type preflightScope map[string]preflightVariable
@@ -77,6 +78,9 @@ func preflightSteps(steps []StepConfig, workflows map[string]WorkflowConfig, sco
 }
 
 func preflightStep(step StepConfig, workflows map[string]WorkflowConfig, scope preflightScope, path string, depth int) error {
+	if _, err := validateRegisterInteger(step); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
 	if step.When != nil {
 		if err := requirePreflightVariable(scope, step.When.Variable, path+" when.variable"); err != nil {
 			return err
@@ -91,7 +95,7 @@ func preflightStep(step StepConfig, workflows map[string]WorkflowConfig, scope p
 	if err := checkTemplateString(step.Command, scope, path+" cmd"); err != nil {
 		return err
 	}
-	if err := rejectTaintedTemplateReferences(step.Command, scope, path+" cmd"); err != nil {
+	if err := rejectTaintedCommandReferences(step.Command, scope, path+" cmd"); err != nil {
 		return err
 	}
 	if step.Approval != nil {
@@ -129,7 +133,7 @@ func preflightStep(step StepConfig, workflows map[string]WorkflowConfig, scope p
 
 	// A step registers its output before its validation actions execute.
 	if register := strings.TrimSpace(step.Register); register != "" {
-		scope[register] = preflightVariable{dynamic: true, tainted: true}
+		scope[register] = preflightVariable{dynamic: true, tainted: true, integer: step.RegisterInteger != nil}
 	}
 	for index, validation := range stepValidations(step) {
 		validationPath := fmt.Sprintf("%s validation[%d]", path, index+1)
@@ -153,7 +157,7 @@ func preflightStep(step StepConfig, workflows map[string]WorkflowConfig, scope p
 		if err := checkTemplateString(action.Command, scope, path+" "+label+".cmd"); err != nil {
 			return err
 		}
-		if err := rejectTaintedTemplateReferences(action.Command, scope, path+" "+label+".cmd"); err != nil {
+		if err := rejectTaintedCommandReferences(action.Command, scope, path+" "+label+".cmd"); err != nil {
 			return err
 		}
 		branch := clonePreflightScope(scope)
@@ -428,6 +432,16 @@ func valueHasTaintedReference(value interface{}, scope preflightScope) bool {
 func rejectTaintedTemplateReferences(input string, scope preflightScope, location string) error {
 	for _, match := range templateVariablePattern.FindAllStringSubmatch(input, -1) {
 		if len(match) > 1 && scope[match[1]].tainted {
+			return fmt.Errorf("%s cannot interpolate tainted device output variable %q into an executable field", location, match[1])
+		}
+	}
+	return nil
+}
+
+// Only bounded integer captures may cross the device-output boundary into SSH commands.
+func rejectTaintedCommandReferences(input string, scope preflightScope, location string) error {
+	for _, match := range templateVariablePattern.FindAllStringSubmatch(input, -1) {
+		if len(match) > 1 && scope[match[1]].tainted && !scope[match[1]].integer {
 			return fmt.Errorf("%s cannot interpolate tainted device output variable %q into an executable field", location, match[1])
 		}
 	}

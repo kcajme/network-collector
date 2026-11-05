@@ -72,7 +72,7 @@ func enforceDeviceOutputLimit(output string, limit int) error {
 
 func registerParserOutput(vars map[string]string, step StepConfig, parsedOutput string) bool {
 	name := strings.TrimSpace(step.Register)
-	if name == "" {
+	if name == "" || step.RegisterInteger != nil {
 		return false
 	}
 	vars[name] = parsedOutput
@@ -871,6 +871,15 @@ func executeBlock(ctx *stepExecutionContext, client **ssh.Client, config BlockCo
 func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps []StepConfig, depth int) bool {
 	stopDeviceSteps := false
 	for _, step := range steps {
+		if _, err := validateRegisterInteger(step); err != nil {
+			*ctx.runFailed = true
+			recordStepFailure(ctx, step.Name, err.Error())
+			return true
+		}
+		integerCaptured := false
+		if step.RegisterInteger != nil {
+			delete(ctx.variables, strings.TrimSpace(step.Register))
+		}
 		stepName := strings.TrimSpace(step.Name)
 		if stepName == "" {
 			stepName = "unnamed"
@@ -1301,6 +1310,16 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 					fmt.Printf("structured output for %s step=%s:\n%s\n", ctx.hostname, stepName, protectHumanOutput(validationOutput))
 				}
 			}
+			if step.RegisterInteger != nil {
+				captured, err := captureRegisteredInteger(step, validationOutput)
+				if err != nil {
+					*ctx.runFailed = true
+					recordStepFailure(ctx, stepName, err.Error())
+					return true
+				}
+				ctx.variables[strings.TrimSpace(step.Register)] = captured
+				integerCaptured = true
+			}
 			if registerParserOutput(ctx.variables, step, validationOutput) {
 				slog.Info("registered step output", "hostname", ctx.hostname, "step", stepName, "variable", strings.TrimSpace(step.Register), "metadata", outputMetadata(validationOutput))
 			}
@@ -1344,7 +1363,7 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 			}
 
 			for _, vres := range results {
-				if step.Register != "" && vres.RawExtract != "" && step.Facts == nil {
+				if step.RegisterInteger == nil && step.Register != "" && vres.RawExtract != "" && step.Facts == nil {
 					ctx.variables[step.Register] = vres.RawExtract
 					slog.Info("registered variable", "hostname", ctx.hostname, "step", stepName, "variable", step.Register, "metadata", outputMetadata(vres.RawExtract))
 					break
@@ -1370,6 +1389,12 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 			break
 		}
 
+		if step.RegisterInteger != nil && !integerCaptured && !previewOnly {
+			delete(ctx.variables, strings.TrimSpace(step.Register))
+			*ctx.runFailed = true
+			recordStepFailure(ctx, stepName, "bounded integer capture did not complete")
+			return true
+		}
 		if stepExecutionFailed && step.Ensure != nil {
 			stopDeviceSteps = true
 			slog.Info("stopping remaining steps after declarative ensure failure", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName)
