@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+	"golang.org/x/term"
 )
 
 type progressHost struct {
@@ -23,6 +24,10 @@ type progressHost struct {
 // progressDisplay consumes the same lifecycle events as disk/report sinks.
 // It never receives command output, credentials or validation payloads.
 type progressDisplay struct {
+	inputState        *term.State
+	rawInput          bool
+	commandCursor     int
+	escapeInput       []byte
 	page              int
 	pageSize          int
 	focusHost         string
@@ -69,6 +74,7 @@ func newProgressDisplay(writer io.Writer, devices []DeviceConfig) *progressDispl
 
 func (d *progressDisplay) start() {
 	d.mu.Lock()
+	d.enableInput()
 	d.draw(time.Now())
 	d.mu.Unlock()
 	go func() {
@@ -177,7 +183,16 @@ func (d *progressDisplay) render(now time.Time) string {
 	return d.renderSize(now, width, height)
 }
 
-func (d *progressDisplay) draw(now time.Time) { fmt.Fprint(d.writer, "\x1b[H\x1b[2J", d.render(now)) }
+func (d *progressDisplay) draw(now time.Time) {
+	frame := strings.ReplaceAll(d.render(now), "\n", "\r\n")
+	fmt.Fprint(d.writer, "\x1b[H\x1b[2J", frame)
+	if !d.closed && d.input != nil && d.paused == 0 {
+		width, height := d.dimensions()
+		prompt, column := d.commandLine(max(0, width-1))
+		row := max(1, height-1)
+		fmt.Fprintf(d.writer, "\x1b[%d;1H\x1b[2K%s\x1b[%d;%dH", row, prompt, row, column+1)
+	}
+}
 
 // Keep prompts readable while other hosts and timers continue in the background.
 func (d *progressDisplay) pause() func() {
@@ -186,8 +201,20 @@ func (d *progressDisplay) pause() func() {
 	}
 	d.mu.Lock()
 	d.paused++
+	if d.paused == 1 {
+		d.restoreInput()
+		fmt.Fprint(d.writer, "\r\x1b[2K")
+	}
 	d.mu.Unlock()
-	return func() { d.mu.Lock(); d.paused--; d.mu.Unlock() }
+	return func() {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		d.paused--
+		if d.paused == 0 && !d.closed {
+			d.enableInput()
+			d.draw(time.Now())
+		}
+	}
 }
 
 func (d *progressDisplay) Close() error {
@@ -202,12 +229,13 @@ func (d *progressDisplay) Close() error {
 	<-d.stopped
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	d.restoreInput()
 	d.draw(time.Now())
 	return nil
 }
 
-// Read only available terminal bytes, and never compete with a suspended prompt.
-// Canonical terminal mode retains normal editing, echo and Ctrl+C handling.
+// Read available bytes only. The menu owns raw/no-echo input while active;
+// pause restores normal terminal input before credential and approval prompts.
 func (d *progressDisplay) readCommands() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -216,24 +244,23 @@ func (d *progressDisplay) readCommands() {
 	}
 	// #nosec G115 -- operating-system descriptor used by poll.
 	fds := []unix.PollFd{{Fd: int32(d.input.Fd()), Events: unix.POLLIN}}
+	changed := false
 	for count := 0; count < 128; count++ {
 		n, err := unix.Poll(fds, 0)
 		if err != nil || n == 0 || fds[0].Revents&unix.POLLIN == 0 {
-			return
+			break
 		}
 		var b [1]byte
 		if n, err := d.input.Read(b[:]); err != nil || n == 0 {
-			return
+			break
 		}
-		if b[0] == '\n' {
-			d.handleCommand(strings.TrimSpace(string(d.commandBuffer)))
-			d.commandBuffer = nil
-			if d.paused > 0 {
-				return
-			}
-		} else if len(d.commandBuffer) < 64 {
-			d.commandBuffer = append(d.commandBuffer, b[0])
+		changed = d.acceptCommandByte(b[0]) || changed
+		if d.paused > 0 {
+			break
 		}
+	}
+	if changed {
+		d.draw(time.Now())
 	}
 }
 

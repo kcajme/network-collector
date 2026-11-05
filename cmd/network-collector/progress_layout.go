@@ -89,12 +89,12 @@ func (d *progressDisplay) menuLines(width int) []string {
 	case d.input != nil:
 		if d.idle {
 			if width >= 65 {
-				message = "Jobs finished. r ID retry | q exit | h help | n/p pages"
+				message = "Jobs finished. [R ID] Retry  [Q] Exit  [H] Help  [N/P] Pages"
 			} else {
-				message = "r ID retry | q exit | n/p pages | h help"
+				message = "[R ID] Retry [Q] Exit [N/P] Pages [H] Help"
 			}
 		} else {
-			message = "q stop | h help | n/p pages"
+			message = "[Q] Stop  [H] Help  [N/P] Pages"
 		}
 	}
 	return wrapProgress(message, width)
@@ -103,6 +103,24 @@ func (d *progressDisplay) menuLines(width int) []string {
 // Leave the last column unused to prevent auto-wrap, and two rows for command input and its Enter key.
 // Footer space is reserved before calculating the number of visible hosts.
 func (d *progressDisplay) renderSize(now time.Time, terminalWidth, terminalHeight int) string {
+	if terminalWidth < 60 || terminalHeight < 16 {
+		return d.renderContent(now, terminalWidth, terminalHeight)
+	}
+	width := terminalWidth - 1
+	content := d.renderContent(now, terminalWidth-4, terminalHeight-4)
+	border := "+" + strings.Repeat("-", max(0, width-2)) + "+"
+	lines := []string{border}
+	for index, line := range strings.Split(strings.TrimSuffix(content, "\n"), "\n") {
+		if index == 2 || strings.HasPrefix(line, "Hosts ") {
+			lines = append(lines, border)
+		}
+		lines = append(lines, "| "+progressText(line, max(0, width-4))+" |")
+	}
+	lines = append(lines, border)
+	return finishProgress(lines, width, max(1, terminalHeight-2), terminalHeight)
+}
+
+func (d *progressDisplay) renderContent(now time.Time, terminalWidth, terminalHeight int) string {
 	width := max(0, terminalWidth-1)
 	height := max(1, terminalHeight-2)
 	if width == 0 {
@@ -149,7 +167,7 @@ func (d *progressDisplay) renderSize(now time.Time, terminalWidth, terminalHeigh
 		d.pageSize = 0
 		d.page = max(0, d.page)
 		if !d.closed && d.input != nil && d.pendingRetry == "" && !d.confirmStop && !d.stopping {
-			menu = wrapProgress("q quit | h help", width)
+			menu = wrapProgress("[Q] Quit [H] Help", width)
 		}
 		compact := []string{"Enlarge terminal for host table.", fmt.Sprintf("Total %d Left %d Failed %d", len(rows), counts["ACTIVE"]+counts["QUEUED"], counts["FAILED"])}
 		if d.pendingRetry != "" && (width < 25 || len(menu) > height) {

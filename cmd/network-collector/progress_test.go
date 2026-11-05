@@ -31,7 +31,7 @@ func TestProgressOrderingTimersAndTotals(t *testing.T) {
 	rows := d.render(now.Add(time.Hour))
 	positions := map[string]int{}
 	for index, line := range strings.Split(rows, "\n") {
-		fields := strings.Fields(line)
+		fields := strings.Fields(strings.Trim(line, "| "))
 		if len(fields) >= 3 && (fields[1] == "a" || fields[1] == "b" || fields[1] == "c") {
 			positions[fields[1]] = index
 		}

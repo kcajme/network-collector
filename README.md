@@ -41,6 +41,18 @@ for configuration management. The two can complement each other.
 
 ## Live operation progress
 
+The terminal menu has a dedicated `Command>` line. Typed text stays visible
+through timer refreshes and window resizes; there is no typing deadline. Press
+Enter to submit a command. Backspace/Delete, Left/Right, Home/End, Ctrl+A/Ctrl+E,
+and Ctrl+U (clear line) support editing. Ctrl+C remains ignored in the menu.
+
+On larger terminals, an ASCII frame and section dividers separate the host
+table, totals and bracketed shortcut legend. Small terminals use the compact
+layout. Normal terminal input is restored for credentials, approvals and RSA
+passcodes, then the editable command line resumes afterward. Terminal settings
+are restored on exit.
+
+
 The view adapts to the current terminal width and height on every refresh
 (including window resizes, within one second). Long labels are shortened with
 `~`; narrower views hide category, then step columns while retaining host IDs,

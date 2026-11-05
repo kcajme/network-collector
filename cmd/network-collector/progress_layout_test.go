@@ -75,7 +75,7 @@ func TestProgressPaginationAccessesEveryHostAndKeepsGlobalTotals(t *testing.T) {
 			t.Fatalf("totals reflect only visible hosts: %s", frame)
 		}
 		for _, line := range strings.Split(frame, "\n") {
-			fields := strings.Fields(line)
+			fields := strings.Fields(strings.Trim(line, "| "))
 			if len(fields) > 2 && strings.HasPrefix(fields[1], "long-device") {
 				seen[fields[0]] = true
 			}
@@ -128,7 +128,7 @@ func TestProgressResizesAndClampsPageWithoutLosingPrompts(t *testing.T) {
 	}
 	d.confirmStop = false
 	small := d.renderSize(time.Now(), 20, 5)
-	if !strings.Contains(small, "Enlarge") || !strings.Contains(small, "q quit") {
+	if !strings.Contains(small, "Enlarge") || !strings.Contains(small, "[Q] Quit") {
 		t.Fatalf("compact instructions unavailable: %s", small)
 	}
 }
