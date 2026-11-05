@@ -81,6 +81,23 @@ when the run ends. Approval and RSA passcode prompts temporarily pause redraws.
 Use `--progress=false` to turn off the live table and restore console output.
 `--lint` and `--plan` remain offline and do not start a display.
 
+While the terminal menu is available, Ctrl+C does not quit the application.
+Type `h` then Enter to toggle help. Type `q` (or `quit`/`stop`) then Enter,
+then `y` and Enter to confirm stopping the entire operation; any other response
+continues the run. The display remains live while confirmation is pending.
+
+Confirmed quit cancels pending local work and interruptible waits, marks affected
+hosts cancelled, and exits with status 130. If a transport or prompt cannot
+finish, shutdown forces an exit after five seconds and restores terminal input
+settings. Quitting does not roll back device commands already sent, or stop an
+upgrade already running on a device. Keep the session logs and journal for
+checking device state before resuming. Menu input pauses during approval and RSA
+passcode prompts so it cannot consume credentials or approval responses.
+
+Without the menu (`--progress=false`, JSON, redirected input/output, or a dumb
+terminal), Ctrl+C retains its cancellation behavior. SIGTERM also requests
+shutdown, and a second SIGTERM forces immediate exit.
+
 ## Security
 
 See [`SECURITY.md`](SECURITY.md) to report vulnerabilities privately. Security

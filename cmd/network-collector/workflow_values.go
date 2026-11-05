@@ -181,20 +181,24 @@ func requestApproval(ctx *stepExecutionContext, config ApprovalConfig, stepName 
 	}
 	fmt.Fprintf(writer, "device=%s step=%s %s [y/N] ", ctx.hostname, stepName, message)
 	var response approvalAnswer
+	answers := make(chan approvalAnswer, 1)
+	go func() { answers <- readApprovalAnswer(ctx.approvalInput) }()
+	var timeout <-chan time.Time
 	if config.TimeoutSeconds > 0 {
-		answers := make(chan approvalAnswer, 1)
-		go func() {
-			answers <- readApprovalAnswer(ctx.approvalInput)
-		}()
-		select {
-		case response = <-answers:
-		case <-time.After(time.Duration(config.TimeoutSeconds) * time.Second):
-			ctx.approvalInput.expired = true
-			return false, fmt.Errorf("approval timed out after %d seconds", config.TimeoutSeconds)
-		}
-	} else {
-		response = readApprovalAnswer(ctx.approvalInput)
+		timer := time.NewTimer(time.Duration(config.TimeoutSeconds) * time.Second)
+		defer timer.Stop()
+		timeout = timer.C
 	}
+	select {
+	case response = <-answers:
+	case <-stepRunContext(ctx).Done():
+		ctx.approvalInput.expired = true
+		return false, stepRunContext(ctx).Err()
+	case <-timeout:
+		ctx.approvalInput.expired = true
+		return false, fmt.Errorf("approval timed out after %d seconds", config.TimeoutSeconds)
+	}
+
 	if response.err != nil && response.err != io.EOF {
 		return false, fmt.Errorf("read approval: %w", response.err)
 	}

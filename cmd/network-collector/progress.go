@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 type progressHost struct {
@@ -20,15 +23,21 @@ type progressHost struct {
 // progressDisplay consumes the same lifecycle events as disk/report sinks.
 // It never receives command output, credentials or validation payloads.
 type progressDisplay struct {
-	mu       sync.Mutex
-	writer   io.Writer
-	hosts    map[string]*progressHost
-	order    []string
-	sequence int
-	paused   int
-	closed   bool
-	done     chan struct{}
-	stopped  chan struct{}
+	input         *os.File
+	requestStop   func()
+	confirmStop   bool
+	help          bool
+	stopping      bool
+	commandBuffer []byte
+	mu            sync.Mutex
+	writer        io.Writer
+	hosts         map[string]*progressHost
+	order         []string
+	sequence      int
+	paused        int
+	closed        bool
+	done          chan struct{}
+	stopped       chan struct{}
 }
 
 func newProgressDisplay(writer io.Writer, devices []DeviceConfig) *progressDisplay {
@@ -54,12 +63,16 @@ func (d *progressDisplay) start() {
 	d.mu.Unlock()
 	go func() {
 		defer close(d.stopped)
+		keyboard := time.NewTicker(50 * time.Millisecond)
+		defer keyboard.Stop()
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-d.done:
 				return
+			case <-keyboard.C:
+				d.readCommands()
 			case now := <-ticker.C:
 				d.mu.Lock()
 				if d.paused == 0 {
@@ -105,6 +118,9 @@ func (d *progressDisplay) Handle(_ context.Context, e lifecycleEvent) error {
 			h.state = "DONE"
 			if e.Failed != nil && *e.Failed {
 				h.state = "FAILED"
+			}
+			if e.Data["interrupted"] == true {
+				h.state = "CANCELLED"
 			}
 			d.sequence++
 			h.completed = d.sequence
@@ -176,6 +192,18 @@ func (d *progressDisplay) render(now time.Time) string {
 	fmt.Fprintln(&out, strings.Repeat("-", 78))
 	fmt.Fprintf(&out, "Total: %d | Active: %d | Queued: %d | Remaining: %d\n", len(rows), counts["ACTIVE"], counts["QUEUED"], counts["ACTIVE"]+counts["QUEUED"])
 	fmt.Fprintf(&out, "Done: %d | Failed: %d | Not run: %d | Cancelled: %d\n", counts["DONE"], counts["FAILED"], counts["NOT RUN"], counts["CANCELLED"])
+	if !d.closed {
+		if d.stopping {
+			fmt.Fprintln(&out, "Stopping operation... closing local work.")
+		} else if d.confirmStop {
+			fmt.Fprintln(&out, "Stop this operation? Enter y to stop, or n to continue.")
+		} else if d.input != nil {
+			fmt.Fprintln(&out, "Commands: q + Enter = stop | h + Enter = help")
+		}
+		if d.help {
+			fmt.Fprintln(&out, "Stopping cancels local work; it does not roll back changes already sent.")
+		}
+	}
 	return out.String()
 }
 
@@ -206,4 +234,60 @@ func (d *progressDisplay) Close() error {
 	defer d.mu.Unlock()
 	d.draw(time.Now())
 	return nil
+}
+
+// Read only available terminal bytes, and never compete with a suspended prompt.
+// Canonical terminal mode retains normal editing, echo and Ctrl+C handling.
+func (d *progressDisplay) readCommands() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed || d.paused > 0 || d.input == nil {
+		return
+	}
+	// #nosec G115 -- operating-system descriptor used by poll.
+	fds := []unix.PollFd{{Fd: int32(d.input.Fd()), Events: unix.POLLIN}}
+	for count := 0; count < 128; count++ {
+		n, err := unix.Poll(fds, 0)
+		if err != nil || n == 0 || fds[0].Revents&unix.POLLIN == 0 {
+			return
+		}
+		var b [1]byte
+		if n, err := d.input.Read(b[:]); err != nil || n == 0 {
+			return
+		}
+		if b[0] == '\n' {
+			d.handleCommand(strings.TrimSpace(string(d.commandBuffer)))
+			d.commandBuffer = nil
+			if d.paused > 0 {
+				return
+			}
+		} else if len(d.commandBuffer) < 64 {
+			d.commandBuffer = append(d.commandBuffer, b[0])
+		}
+	}
+}
+
+// Called with the display lock held.
+func (d *progressDisplay) handleCommand(command string) {
+	if d.stopping {
+		return
+	}
+	command = strings.ToLower(command)
+	if d.confirmStop {
+		d.confirmStop = false
+		if command == "y" || command == "yes" {
+			d.stopping = true
+			if d.requestStop != nil {
+				d.requestStop()
+			}
+		}
+	} else {
+		switch command {
+		case "q", "quit", "stop":
+			d.confirmStop = true
+		case "h", "help", "?":
+			d.help = !d.help
+		}
+	}
+	d.draw(time.Now())
 }

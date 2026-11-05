@@ -259,6 +259,9 @@ func sshProbeAddress(host string, port int) string {
 }
 
 func waitForSSHPort(host string, cfg *SSHProbeConfig) error {
+	return waitForSSHPortContext(context.Background(), host, cfg)
+}
+func waitForSSHPortContext(runContext context.Context, host string, cfg *SSHProbeConfig) error {
 	probe, err := resolveSSHProbeConfig(cfg)
 	if err != nil {
 		return err
@@ -267,14 +270,16 @@ func waitForSSHPort(host string, cfg *SSHProbeConfig) error {
 	address := sshProbeAddress(host, probe.Port)
 	var lastErr error
 	for attempt := 1; attempt <= probe.Attempts; attempt++ {
-		conn, err := net.DialTimeout("tcp", address, probe.Timeout)
+		conn, err := (&net.Dialer{Timeout: probe.Timeout}).DialContext(runContext, "tcp", address)
 		if err == nil {
 			_ = conn.Close()
 			return nil
 		}
 		lastErr = err
 		if attempt < probe.Attempts {
-			time.Sleep(probe.Interval)
+			if err := waitRunContext(runContext, probe.Interval); err != nil {
+				return err
+			}
 		}
 	}
 	return fmt.Errorf("ssh probe failed for %s after %d attempts: %w", address, probe.Attempts, lastErr)
@@ -992,7 +997,7 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 				recordStepFailure(ctx, stepName, err.Error())
 				break
 			}
-			if executeRepeat(ctx, client, *step.Repeat, stepName, depth+1, time.Sleep) {
+			if executeRepeat(ctx, client, *step.Repeat, stepName, depth+1, func(d time.Duration) { _ = waitRunContext(ctx.runContext, d) }) {
 				stopDeviceSteps = true
 				break
 			}
@@ -1042,7 +1047,10 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 		if wait > 0 {
 			slog.Info("waiting before step", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName, "duration", wait)
 			writeSessionf(ctx.sessionLog, "\n[step:%s] waiting %s\n", stepName, wait)
-			time.Sleep(wait)
+			if waitRunContext(ctx.runContext, wait) != nil {
+				*ctx.runFailed = true
+				return true
+			}
 		}
 
 		if step.SSHProbe != nil {
@@ -1067,7 +1075,7 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 
 			slog.Info("probing SSH port", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName)
 			writeSessionf(ctx.sessionLog, "\n[step:%s] probing SSH port on %s\n", stepName, ctx.ip)
-			if err := waitForSSHPort(ctx.ip, step.SSHProbe); err != nil {
+			if err := waitForSSHPortContext(stepRunContext(ctx), ctx.ip, step.SSHProbe); err != nil {
 				*ctx.runFailed = true
 				stopDeviceSteps = true
 				slog.Error("SSH probe failed", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName, "error", err)
@@ -1080,7 +1088,10 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 			if probe.PostWait > 0 {
 				slog.Info("waiting after successful SSH probe", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName, "duration", probe.PostWait)
 				writeSessionf(ctx.sessionLog, "[step:%s] waiting %s after successful SSH probe\n", stepName, probe.PostWait)
-				time.Sleep(probe.PostWait)
+				if waitRunContext(ctx.runContext, probe.PostWait) != nil {
+					*ctx.runFailed = true
+					return true
+				}
 			}
 
 			*client = ssh.NewClient(ctx.opts...)
@@ -1388,7 +1399,10 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 					interval = 60 * time.Second
 				}
 				slog.Info("retrying step", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName, "interval", interval, "attempt", attempt+1)
-				time.Sleep(interval)
+				if waitRunContext(ctx.runContext, interval) != nil {
+					*ctx.runFailed = true
+					return true
+				}
 				continue
 			}
 
@@ -1496,7 +1510,7 @@ func executeGNMISubscribe(ctx *stepExecutionContext, sshClient **ssh.Client, con
 	if err != nil {
 		return "", err
 	}
-	return client.SubscribeEvents(context.Background(), subscription, handler)
+	return client.SubscribeEvents(stepRunContext(ctx), subscription, handler)
 }
 
 func gnmiTriggerHandler(ctx *stepExecutionContext, sshClient **ssh.Client, triggers []GNMITriggerConfig, depth int) (gnmidriver.EventHandler, error) {

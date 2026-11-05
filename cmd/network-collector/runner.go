@@ -38,8 +38,11 @@ func runSSHDeviceContext(runContext context.Context, index, occurrence int, devi
 	events.emit(lifecycleEvent{Type: "device.started", Hostname: hostname, IP: ip})
 	defer func() {
 		result.duration = time.Since(startedAt)
+		if runContext.Err() != nil {
+			result.failed = true
+		}
 		failed := result.failed
-		events.emit(lifecycleEvent{Type: "device.completed", Hostname: hostname, IP: ip, Failed: &failed, Data: map[string]interface{}{"duration_ns": result.duration.Nanoseconds()}})
+		events.emit(lifecycleEvent{Type: "device.completed", Hostname: hostname, IP: ip, Failed: &failed, Data: map[string]interface{}{"duration_ns": result.duration.Nanoseconds(), "interrupted": runContext.Err() != nil}})
 	}()
 	deviceType := strings.TrimSpace(device.Type)
 

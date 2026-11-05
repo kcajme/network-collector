@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/gwoodwa1/network-collector/internal/reporting"
@@ -300,6 +298,10 @@ func main() {
 		}
 		resumeDir, resumeManifest = resolved, manifest
 	}
+	// #nosec G115 -- terminal descriptor conversion.
+	menuEnabled := progressOut && !jsonOut && os.Getenv("TERM") != "dumb" && term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+	runContext, requestStop, finishRun := newRunCancellation(os.Stdin, os.Stderr, menuEnabled)
+	defer finishRun()
 	deviceCredentials := make([]credentials.Credentials, len(devices))
 	var rsaAuth *rsaTokenAuth
 	if len(devices) > 0 {
@@ -331,7 +333,7 @@ func main() {
 			os.Exit(1)
 		}
 		if strings.EqualFold(providerType, "interactive") || strings.EqualFold(providerType, "prompt") {
-			shared, resolveErr := provider.Resolve(context.Background(), credentials.Target{Hostname: "selected inventory"})
+			shared, resolveErr := provider.Resolve(runContext, credentials.Target{Hostname: "selected inventory"})
 			if resolveErr != nil {
 				slog.Error("error resolving credentials", "error", resolveErr)
 				os.Exit(1)
@@ -344,7 +346,7 @@ func main() {
 			}
 		} else {
 			for index, device := range devices {
-				deviceCredentials[index], err = provider.Resolve(context.Background(), credentials.Target{Hostname: device.Hostname, IP: device.IP, Profile: device.CredentialProfile})
+				deviceCredentials[index], err = provider.Resolve(runContext, credentials.Target{Hostname: device.Hostname, IP: device.IP, Profile: device.CredentialProfile})
 				if err != nil {
 					slog.Error("error resolving credentials", "hostname", device.Hostname, "error", err)
 					os.Exit(1)
@@ -376,8 +378,6 @@ func main() {
 	}
 
 	runStarted := time.Now()
-	runContext, stopRun := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stopRun()
 	if err := pruneSessionLogs(config.Output.RetentionDays, runStarted); err != nil {
 		slog.Error("error pruning expired session logs", "error", err)
 		os.Exit(1)
@@ -473,9 +473,17 @@ func main() {
 		slog.SetDefault(slog.New(slog.NewTextHandler(operationLog, nil)))
 		config.Output.ConsoleOutput = false
 		config.progress = newProgressDisplay(os.Stdout, devices)
+		config.progress.requestStop = requestStop
+		// #nosec G115 -- terminal descriptor conversion.
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			config.progress.input = os.Stdin
+		}
 		events.sinks = append(events.sinks, config.progress)
 		if rsaAuth != nil {
 			rsaAuth.progress = config.progress
+		}
+		if menuEnabled {
+			signal.Ignore(os.Interrupt)
 		}
 		config.progress.start()
 	}
@@ -564,6 +572,11 @@ func main() {
 		fmt.Println(string(out))
 	} else if prettyOut && !displayEnabled {
 		fmt.Print(renderPrettyResults(deviceResults, runFailed, time.Since(runStarted), prettyColourEnabled(os.Stdout)))
+	}
+
+	if runContext.Err() != nil {
+		finishRun()
+		os.Exit(130)
 	}
 
 	// Exit non-zero if any validation failed or errored and flag set
