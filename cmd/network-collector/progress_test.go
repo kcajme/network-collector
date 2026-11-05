@@ -29,7 +29,14 @@ func TestProgressOrderingTimersAndTotals(t *testing.T) {
 	emit("device.completed", "b", "2", "", "", now.Add(11*time.Second))
 	emit("device.completed", "a", "1", "", "", now.Add(12*time.Second))
 	rows := d.render(now.Add(time.Hour))
-	if strings.Index(rows, "b                  DONE") > strings.Index(rows, "a                  DONE") || strings.Index(rows, "a                  DONE") > strings.Index(rows, "c                  QUEUED") {
+	positions := map[string]int{}
+	for index, line := range strings.Split(rows, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 3 && (fields[1] == "a" || fields[1] == "b" || fields[1] == "c") {
+			positions[fields[1]] = index
+		}
+	}
+	if len(positions) != 3 || positions["b"] >= positions["a"] || positions["a"] >= positions["c"] {
 		t.Fatalf("completion order wrong:\n%s", rows)
 	}
 	for _, want := range []string{"Total: 3", "Remaining: 1", "Done: 2", "12s"} {

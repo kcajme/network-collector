@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +23,10 @@ type progressHost struct {
 // progressDisplay consumes the same lifecycle events as disk/report sinks.
 // It never receives command output, credentials or validation payloads.
 type progressDisplay struct {
+	page              int
+	pageSize          int
+	focusHost         string
+	size              func() (int, int)
 	idle              bool
 	retryDescriptions map[string]string
 	retryEnabled      map[string]bool
@@ -151,6 +154,9 @@ func (d *progressDisplay) Handle(_ context.Context, e lifecycleEvent) error {
 }
 
 func progressText(value string, width int) string {
+	if width <= 0 {
+		return ""
+	}
 	var b strings.Builder
 	for _, r := range value {
 		if r >= 32 && r <= 126 {
@@ -167,71 +173,8 @@ func progressText(value string, width int) string {
 }
 
 func (d *progressDisplay) render(now time.Time) string {
-	rows := append([]string(nil), d.order...)
-	// Finished hosts first, oldest completion at the top; new completions append.
-	sort.SliceStable(rows, func(i, j int) bool {
-		a, b := d.hosts[rows[i]], d.hosts[rows[j]]
-		if (a.completed > 0) != (b.completed > 0) {
-			return a.completed > 0
-		}
-		if a.completed > 0 {
-			return a.completed < b.completed
-		}
-		return false
-	})
-	var out strings.Builder
-	fmt.Fprintln(&out, "NETWORK COLLECTOR - operation progress")
-	fmt.Fprintln(&out, "ID  HOST               STATE     CATEGORY       STEP                 STAGE TIME")
-	fmt.Fprintln(&out, strings.Repeat("-", 78))
-	counts := map[string]int{}
-	for _, key := range rows {
-		h := d.hosts[key]
-		counts[h.state]++
-		elapsed := "-"
-		if !h.since.IsZero() {
-			elapsed = now.Sub(h.since).Truncate(time.Second).String()
-			if h.completed > 0 {
-				elapsed = h.ended.Sub(h.since).Truncate(time.Second).String()
-			}
-		}
-		id := 0
-		for index, k := range d.order {
-			if k == key {
-				id = index + 1
-				break
-			}
-		}
-		fmt.Fprintf(&out, "%3d %s %s %s %s %s\n", id, progressText(h.name, 18), progressText(h.state, 9), progressText(h.category, 14), progressText(h.step, 20), elapsed)
-	}
-	fmt.Fprintln(&out, strings.Repeat("-", 78))
-	fmt.Fprintf(&out, "Total: %d | Active: %d | Queued: %d | Remaining: %d\n", len(rows), counts["ACTIVE"], counts["QUEUED"], counts["ACTIVE"]+counts["QUEUED"])
-	fmt.Fprintf(&out, "Done: %d | Failed: %d | Not run: %d | Cancelled: %d\n", counts["DONE"], counts["FAILED"], counts["NOT RUN"], counts["CANCELLED"])
-	if !d.closed {
-		if d.pendingRetry != "" {
-			fmt.Fprintln(&out, d.retryDescriptions[d.pendingRetry])
-		} else if d.stopping {
-			fmt.Fprintln(&out, "Stopping operation... closing local work.")
-		} else if d.confirmStop {
-			if d.idle {
-				fmt.Fprintln(&out, "Exit application? Enter y to exit, or n to stay.")
-			} else {
-				fmt.Fprintln(&out, "Stop this operation? Enter y to stop, or n to continue.")
-			}
-		} else if d.input != nil {
-			if d.idle {
-				fmt.Fprintln(&out, "Jobs finished. Commands: r <ID> = retry failed host | q = exit | h = help")
-			} else {
-				fmt.Fprintln(&out, "Commands: q + Enter = stop | h + Enter = help")
-			}
-			if d.notice != "" {
-				fmt.Fprintln(&out, d.notice)
-			}
-		}
-		if d.help {
-			fmt.Fprintln(&out, "Stopping cancels local work; it does not roll back changes already sent.")
-		}
-	}
-	return out.String()
+	width, height := d.dimensions()
+	return d.renderSize(now, width, height)
 }
 
 func (d *progressDisplay) draw(now time.Time) { fmt.Fprint(d.writer, "\x1b[H\x1b[2J", d.render(now)) }
@@ -301,6 +244,14 @@ func (d *progressDisplay) handleCommand(command string) {
 	}
 	command = strings.ToLower(command)
 	if d.pendingRetry != "" {
+		if command == "y" || command == "yes" {
+			width, height := d.dimensions()
+			if width < 26 || len(d.menuLines(max(0, width-1))) > max(1, height-2) {
+				d.notice = "Enlarge terminal to confirm retry."
+				d.draw(time.Now())
+				return
+			}
+		}
 		host := d.pendingRetry
 		d.pendingRetry = ""
 		if command == "y" || command == "yes" {
@@ -325,11 +276,26 @@ func (d *progressDisplay) handleCommand(command string) {
 		switch command {
 		case "q", "quit", "stop":
 			d.confirmStop = true
+		case "n", "next":
+			d.page++
+		case "p", "prev", "previous":
+			d.page--
+		case "first":
+			d.page = 0
+		case "last":
+			d.page = len(d.order)
 		case "h", "help", "?":
 			d.help = !d.help
 		default:
 			fields := strings.Fields(command)
-			if len(fields) == 2 && (fields[0] == "r" || fields[0] == "retry") {
+			if len(fields) == 2 && (fields[0] == "g" || fields[0] == "goto") {
+				id, err := strconv.Atoi(fields[1])
+				if err == nil && id >= 1 && id <= len(d.order) {
+					d.focusHost = d.order[id-1]
+				} else {
+					d.notice = "Choose a host ID shown in the table."
+				}
+			} else if len(fields) == 2 && (fields[0] == "r" || fields[0] == "retry") {
 				id, err := strconv.Atoi(fields[1])
 				if !d.idle {
 					d.notice = "Wait until current jobs finish before retrying a host."
@@ -339,6 +305,7 @@ func (d *progressDisplay) handleCommand(command string) {
 					key := d.order[id-1]
 					if d.retryEnabled[key] {
 						d.pendingRetry = key
+						d.focusHost = key
 						d.notice = ""
 					} else {
 						d.notice = d.retryDescriptions[key]

@@ -41,6 +41,22 @@ for configuration management. The two can complement each other.
 
 ## Live operation progress
 
+The view adapts to the current terminal width and height on every refresh
+(including window resizes, within one second). Long labels are shortened with
+`~`; narrower views hide category, then step columns while retaining host IDs,
+state and elapsed time. Very small windows show a compact prompt asking you to
+enlarge the terminal. Full labels remain in configuration, events and disk logs.
+
+When all hosts do not fit vertically, use `n` / `p` then Enter for next/previous
+pages, `first` / `last`, or `g <ID>` to jump to a host's current page. The view
+shows the visible host range and page number. IDs and completed-host ordering
+stay consistent across pages; totals always describe the entire operation.
+Footer space is reserved for totals and confirmations, with separate space for
+command entry so the table does not wrap or scroll past the terminal boundary.
+If a retry confirmation cannot be shown fully, enlarge the terminal before
+confirming it.
+
+
 Terminal runs now show an ASCII progress table instead of per-host console logs.
 Each target has one row with its state, category, current step and time in that
 category. The timer refreshes every second. Steps without a category use an

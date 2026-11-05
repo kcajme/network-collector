@@ -26,12 +26,12 @@ Rebuild from the repository root with Go 1.27.3:
 
 ```sh
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOAMD64=v1 GOFLAGS=-mod=readonly \
-  go build -trimpath -ldflags="-s -w -X main.version=$(cat VERSION)-session" \
+  go build -trimpath -ldflags="-s -w -X main.version=$(cat VERSION)-terminal-fit" \
   -o bin/linux-amd64/network-collector ./cmd/network-collector
 (cd bin/linux-amd64 && sha256sum network-collector > SHA256SUMS)
 ```
 
-This build reports `2.0.2-session` and supports the bounded
+This build reports `2.0.2-terminal-fit` and supports the bounded
 `register_integer` capture documented in the repository README.
 
 Terminal runs prompt automatically when environment credentials are incomplete.
@@ -44,3 +44,6 @@ Ctrl+C is ignored while the terminal menu is available.
 
 The menu stays open after jobs finish. Use `r <ID>` to retry an eligible failed
 host from its in-memory checkpoint, or `q` and confirm to exit.
+
+The progress view adapts to terminal size. Use `n`/`p` to page hosts or
+`g <ID>` to jump to a host; press Enter after each command.
