@@ -487,11 +487,11 @@ func (c *Client) Execute(cmd string) (string, error) {
 	}
 
 	output, err := c.network.SendInput(cmd)
-	if err != nil {
-		return "", fmt.Errorf("failed to send input command: %w", err)
-	}
 	if len(output) > maxSSHResponseBytes {
 		return "", fmt.Errorf("SSH response exceeds the %d-byte limit", maxSSHResponseBytes)
+	}
+	if err != nil {
+		return string(output), fmt.Errorf("failed to send input command: %w", err)
 	}
 
 	return string(output), nil

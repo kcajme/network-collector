@@ -1909,6 +1909,16 @@ The example paths and healthy values follow the OpenConfig models. Platform supp
 
 Each SSH device run is recorded under `session_logs/` using the hostname and start timestamp in the filename. Set top-level `name_playbook` to include a playbook title in the ASCII banner at the start of each session log.
 
+Per-host logs include received command responses and parsed/validation output by
+default, with blank lines and STEP/STAGE headings separating each step. Retry
+attempts have their own timestamps. Available partial output is retained on
+command errors and expected reload disconnects. Common credential forms remain
+redacted and terminal controls sanitized. The authentication/channel byte stream
+is not written directly to these logs. The live progress view stays quiet.
+Set `output.session_transcript: false` explicitly to retain only output metadata
+instead. Existing logs are not rewritten; this applies to subsequent runs.
+
+
 ### Structured output files
 
 Session logs remain the human-readable transcript. To additionally save command output and JSON as machine-readable artifacts, configure:

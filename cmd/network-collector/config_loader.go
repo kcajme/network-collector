@@ -451,6 +451,7 @@ func loadConfig(configFile string) (Config, bool, error) {
 		return Config{}, false, err
 	}
 	settings := viper.New()
+	settings.SetDefault("output.session_transcript", true)
 	settings.AutomaticEnv()
 	if err := settings.BindEnv("fail_on_fail", "FAIL_ON_FAIL"); err != nil {
 		return Config{}, false, err

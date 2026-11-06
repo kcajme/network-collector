@@ -33,12 +33,12 @@ func TestAtomicWriteUsesOwnerOnlyPermissions(t *testing.T) {
 	}
 }
 
-func TestProtectedOutputIsOmittedByDefaultAndRedactedWhenEnabled(t *testing.T) {
+func TestProtectedOutputMetadataModeAndRedactedTranscript(t *testing.T) {
 	const sensitive = "username admin password=supersecret\n\x1b[31mrouter\x1b]2;hostile-title\x07"
 	var defaultLog bytes.Buffer
 	writeProtectedOutput(&stepExecutionContext{jsonOut: true, sessionLog: &defaultLog}, "command", sensitive)
 	if strings.Contains(defaultLog.String(), "supersecret") || !strings.Contains(defaultLog.String(), "output omitted") {
-		t.Fatalf("default session log disclosed output: %s", defaultLog.String())
+		t.Fatalf("metadata-only session log disclosed output: %s", defaultLog.String())
 	}
 
 	var transcript bytes.Buffer

@@ -396,7 +396,7 @@ func writeProtectedOutput(ctx *stepExecutionContext, header, value string) {
 	if ctx.sessionOutput {
 		display = protectHumanOutput(value)
 	}
-	writeSessionf(ctx.sessionLog, "%s\n%s\n", protectHumanOutput(header), display)
+	writeSessionf(ctx.sessionLog, "%s\n%s\n\n", protectHumanOutput(header), display)
 	if !ctx.jsonOut {
 		console := outputMetadata(value)
 		if ctx.consoleOutput {
@@ -419,4 +419,12 @@ func logStepMessage(ctx *stepExecutionContext, stepName, messageTemplate string)
 		fmt.Printf("device=%s step=%s message=%q\n", ctx.hostname, stepName, protectHumanOutput(message))
 	}
 	return nil
+}
+
+func writeSessionStepHeading(ctx *stepExecutionContext, name, category string) {
+	writeSessionf(ctx.sessionLog, "\n\n%s\nSTEP: %s\n", strings.Repeat("=", 72), protectHumanOutput(name))
+	if strings.TrimSpace(category) != "" {
+		writeSessionf(ctx.sessionLog, "STAGE: %s\n", protectHumanOutput(category))
+	}
+	writeSessionf(ctx.sessionLog, "STARTED: %s\n%s\n\n", time.Now().UTC().Format(time.RFC3339), strings.Repeat("-", 72))
 }

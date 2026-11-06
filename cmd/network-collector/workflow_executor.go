@@ -894,6 +894,11 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 		if stepName == "" {
 			stepName = "unnamed"
 		}
+		headingCategory := strings.TrimSpace(step.Category)
+		if headingCategory == "" {
+			headingCategory = inheritedCategory
+		}
+		writeSessionStepHeading(ctx, stepName, headingCategory)
 		if kind := resumableMutationKind(step); kind != "" && kind != "ensure" && ctx.resumeCompleted[journalEntryKey(runJournalEntry{Hostname: ctx.hostname, IP: ctx.ip, Step: stepName, Occurrence: ctx.occurrence})] {
 			writeSessionf(ctx.sessionLog, "[step:%s] skipped: completed in verified prior run\n", stepName)
 			continue
@@ -1199,6 +1204,7 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 		stepExecutionFailed := false
 		for {
 			attempt++
+			writeSessionf(ctx.sessionLog, "\n[step:%s] attempt %d at %s\n\n", protectHumanOutput(stepName), attempt, time.Now().UTC().Format(time.RFC3339))
 			mutationKind := resumableMutationKind(step)
 			if mutationKind != "" && !ctx.checkMode {
 				entry := runJournalEntry{State: "intent", Hostname: ctx.hostname, IP: ctx.ip, Step: stepName, Occurrence: ctx.occurrence, Kind: mutationKind}
@@ -1251,6 +1257,7 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 					}
 				}
 				if step.GNMISubscribe == nil && step.NETCONF == nil && step.Ensure == nil && step.Facts == nil && !shouldReturnToPrompt(step.ReturnToPrompt) {
+					writeProtectedOutput(ctx, fmt.Sprintf("[step:%s] device command=%q (connection closed)", stepName, commandDisplay), output)
 					slog.Info("step ended without prompt as expected", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName, "error", err)
 					writeSessionf(ctx.sessionLog, "\n[step:%s] command ended without prompt as expected: %v\n", stepName, err)
 					if err := closeSSHClient(*client); err != nil {

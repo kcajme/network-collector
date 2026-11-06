@@ -15,6 +15,7 @@ execution:
 # Optional machine-readable artifacts. Each run gets its own timestamped
 # directory containing raw CLI text, parsed JSON, and a run summary.
 output:
+  session_transcript: true
   directory: artifacts
   save_raw: true
   save_parsed: true

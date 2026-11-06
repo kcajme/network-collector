@@ -94,11 +94,9 @@ func runSSHDeviceContext(runContext context.Context, index, occurrence int, devi
 	if rsaAuth != nil {
 		opts = append(opts, ssh.WithPasswordPattern(rsaPasscodePromptPattern))
 	}
-	channelLog := io.Discard
-	if config.Output.SessionTranscript {
-		channelLog = sessionLog
-	}
-	opts = append(opts, ssh.WithChannelLog(channelLog))
+	// Log complete, sanitized command responses in step order below. Keep the
+	// authentication/channel byte stream separate from the human transcript.
+	opts = append(opts, ssh.WithChannelLog(io.Discard))
 
 	// A scheduled occurrence starts a new session because the previous one was
 	// closed. Never replay an old RSA passcode across that boundary.

@@ -418,6 +418,21 @@ func TestExecuteEnforcesExactResponseBoundary(t *testing.T) {
 	}
 }
 
+func TestExecutePreservesBoundedPartialResponseOnError(t *testing.T) {
+	session := &fakeSSHSession{output: []byte("Reloading device..."), sendErr: errors.New("connection closed")}
+	client := NewClient()
+	client.network = session
+	output, err := client.Execute("reload")
+	if err == nil || output != "Reloading device..." {
+		t.Fatalf("partial response lost: %q %v", output, err)
+	}
+	session.output = make([]byte, maxSSHResponseBytes+1)
+	output, err = client.Execute("show oversized")
+	if err == nil || output != "" || !strings.Contains(err.Error(), "response exceeds") {
+		t.Fatal("oversized failed response was not rejected")
+	}
+}
+
 func TestExecuteValidationAndDisconnectErrors(t *testing.T) {
 	var nilClient *Client
 	if _, err := nilClient.Execute("show version"); err == nil || !strings.Contains(err.Error(), "nil") {
