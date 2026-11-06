@@ -187,7 +187,7 @@ func (d *progressDisplay) renderContent(now time.Time, terminalWidth, terminalHe
 	d.page = max(0, min(d.page, pages-1))
 	start := min(len(rows), d.page*capacity)
 	end := min(len(rows), start+capacity)
-	header := d.hostLine("ID", "HOST", "STATE", "CATEGORY", "STEP", "TIME", width)
+	header := d.hostLine("ID", "HOST", "STATE", "STEP", "COMMAND", "TIME", width)
 	lines := []string{"NETWORK COLLECTOR - operation progress", header}
 	for _, key := range rows[start:end] {
 		h := d.hosts[key]

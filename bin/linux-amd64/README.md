@@ -26,12 +26,12 @@ Rebuild from the repository root with Go 1.27.3:
 
 ```sh
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOAMD64=v1 GOFLAGS=-mod=readonly \
-  go build -trimpath -ldflags="-s -w -X main.version=$(cat VERSION)-hosts-inventory" \
+  go build -trimpath -ldflags="-s -w -X main.version=$(cat VERSION)-column-labels" \
   -o bin/linux-amd64/network-collector ./cmd/network-collector
 (cd bin/linux-amd64 && sha256sum network-collector > SHA256SUMS)
 ```
 
-This build reports `2.0.2-hosts-inventory` and supports the bounded
+This build reports `2.0.2-column-labels` and supports the bounded
 `register_integer` capture documented in the repository README.
 
 Terminal runs prompt automatically when environment credentials are incomplete.
