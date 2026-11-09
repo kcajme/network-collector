@@ -43,7 +43,8 @@ type sshSession interface {
 }
 
 type scrapligoSSHSession struct {
-	driver *network.Driver
+	reloadExpected bool
+	driver         *network.Driver
 }
 
 func (s *scrapligoSSHSession) SendInput(command string) ([]byte, error) {
@@ -51,6 +52,9 @@ func (s *scrapligoSSHSession) SendInput(command string) ([]byte, error) {
 }
 
 func (s *scrapligoSSHSession) Close() error {
+	if s.reloadExpected {
+		return s.driver.Channel.Close()
+	}
 	return s.driver.Close()
 }
 

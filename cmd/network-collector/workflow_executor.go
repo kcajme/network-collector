@@ -881,6 +881,11 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 	defer func() { ctx.progressCategory = inheritedCategory }()
 	stopDeviceSteps := false
 	for _, step := range steps {
+		if err := validateConfirmation(step); err != nil {
+			*ctx.runFailed = true
+			recordStepFailure(ctx, step.Name, err.Error())
+			return true
+		}
 		if _, err := validateRegisterInteger(step); err != nil {
 			*ctx.runFailed = true
 			recordStepFailure(ctx, step.Name, err.Error())
@@ -1243,7 +1248,11 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 				output, commandDisplay, err = executeEnsureStep(ctx, ensureExecutor, *step.Ensure)
 			} else {
 				commandDisplay = cmd
-				output, err = sshExecutor.Execute(cmd)
+				if step.Confirmation != nil {
+					output, err = executeSSHConfirmation(sshExecutor, step, cmd)
+				} else {
+					output, err = sshExecutor.Execute(cmd)
+				}
 			}
 			if limitErr := enforceDeviceOutputLimit(output, outputLimit); limitErr != nil {
 				output = ""
@@ -1257,7 +1266,7 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 						writeSessionf(ctx.sessionLog, "[step:%s] report evidence error: %v\n", stepName, artifactErr)
 					}
 				}
-				if step.GNMISubscribe == nil && step.NETCONF == nil && step.Ensure == nil && step.Facts == nil && !shouldReturnToPrompt(step.ReturnToPrompt) {
+				if step.GNMISubscribe == nil && step.NETCONF == nil && step.Ensure == nil && step.Facts == nil && step.Confirmation == nil && !shouldReturnToPrompt(step.ReturnToPrompt) {
 					writeProtectedOutput(ctx, fmt.Sprintf("[step:%s] device command=%q (connection closed)", stepName, commandDisplay), output)
 					slog.Info("step ended without prompt as expected", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName, "error", err)
 					writeSessionf(ctx.sessionLog, "\n[step:%s] command ended without prompt as expected: %v\n", stepName, err)
@@ -1274,6 +1283,12 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 				writeProtectedOutput(ctx, fmt.Sprintf("[step:%s] command error: %v", stepName, err), output)
 				recordStepFailure(ctx, stepName, fmt.Sprintf("command error: %v", err))
 				break
+			}
+			if step.Confirmation != nil && !shouldReturnToPrompt(step.ReturnToPrompt) && client != nil {
+				if err := closeSSHClient(*client); err != nil {
+					slog.Warn("closing SSH session after confirmation", "error", err)
+				}
+				*client = nil
 			}
 			if mutationKind != "" && !ctx.checkMode {
 				if err := ctx.journal.append(runJournalEntry{State: "completed", Hostname: ctx.hostname, IP: ctx.ip, Step: stepName, Occurrence: ctx.occurrence, Kind: mutationKind}); err != nil {
@@ -1443,9 +1458,9 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 			recordStepFailure(ctx, stepName, "bounded integer capture did not complete")
 			return true
 		}
-		if stepExecutionFailed && step.Ensure != nil {
+		if stepExecutionFailed && (step.Ensure != nil || step.Confirmation != nil) {
 			stopDeviceSteps = true
-			slog.Info("stopping remaining steps after declarative ensure failure", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName)
+			slog.Info("stopping remaining steps after ensure or confirmation failure", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName)
 			break
 		}
 

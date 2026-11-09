@@ -659,6 +659,43 @@ ssh:
 
 The `cmd/network-collector` example supports `ssh.steps`, which lets you run multiple commands over the same SSH connection for a single device. Each step can include `validation` and optional retry behavior.
 
+
+### Commands that ask for confirmation
+
+A yes/no question is not a normal router prompt. Configure the exchange in one
+step so the collector waits for the expected question before sending an answer:
+
+```yaml
+- name: install-activate-id
+  category: Install IOS
+  cmd: 'install activate id {{install_id}} sync'
+  confirmation:
+    prompt: '(?i)This install operation will reload the system,\s*continue\?'
+    response: 'yes'
+  return_to_prompt: false
+```
+
+This replaces the activation step and the separate `cmd: yes` step. Remove the
+activation's `retry` block: confirmation steps reject automatic command retries.
+The prompt regex itself verifies that the expected question was received; no
+separate validation block is needed to recognize it. A mismatched/missing
+question or a send error stops the host and never sends a blind answer.
+
+`return_to_prompt: false` writes one answer and newline, waits for its echo or
+the expected remote disconnect, then closes locally without logout commands.
+It never waits for a normal router prompt after the answer. Keep the existing reboot wait, `ssh_probe`, reconnect and post-upgrade
+verification steps afterward. Sending the answer does not prove reboot or
+activation success. For commands that stay connected, omit this flag to wait
+for the normal prompt after answering.
+
+`confirmation.prompt` must be a static, valid regex that cannot match empty
+output. Responses are literal `yes`, `no`, `y`, or `n`. The activation command
+can use a bounded `register_integer` value as usual. Set `operation_timeout`
+on the SSH target (for example `600` seconds) if the router takes longer than
+the normal timeout to reach the question. This timeout is not a substitute for
+handling the prompt. Interactive confirmation is supported only for SSH commands.
+
+
 ### Inventory-based SSH targets
 
 Keep only host names and addresses in `inventory.yaml`. Groups are optional;

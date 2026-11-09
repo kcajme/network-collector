@@ -191,8 +191,9 @@ func renderOfflinePlan(plan offlinePlan) string {
 func networkCollectorSchema() map[string]interface{} {
 	step := map[string]interface{}{
 		"type": "object", "properties": map[string]interface{}{
-			"category": map[string]string{"type": "string"},
-			"name":     map[string]string{"type": "string"}, "cmd": map[string]string{"type": "string"}, "parser": map[string]string{"type": "string"},
+			"confirmation": map[string]interface{}{"type": "object", "required": []string{"prompt", "response"}, "properties": map[string]interface{}{"prompt": map[string]string{"type": "string"}, "response": map[string]interface{}{"enum": []string{"yes", "no", "y", "n"}}}},
+			"category":     map[string]string{"type": "string"},
+			"name":         map[string]string{"type": "string"}, "cmd": map[string]string{"type": "string"}, "parser": map[string]string{"type": "string"},
 			"register_integer": map[string]interface{}{"$ref": "#/$defs/register_integer"},
 			"message":          map[string]string{"type": "string"}, "register": map[string]string{"type": "string"}, "when": map[string]interface{}{"$ref": "#/$defs/when"},
 			"wait_seconds": map[string]interface{}{"type": "integer", "minimum": 0}, "ssh_probe": map[string]interface{}{"$ref": "#/$defs/ssh_probe"},

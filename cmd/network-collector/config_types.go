@@ -42,7 +42,13 @@ type RegisterIntegerConfig struct {
 	Max     *int64 `mapstructure:"max" yaml:"max"`
 }
 
+type ConfirmationConfig struct {
+	Prompt   string `mapstructure:"prompt" yaml:"prompt"`
+	Response string `mapstructure:"response" yaml:"response"`
+}
+
 type StepConfig struct {
+	Confirmation    *ConfirmationConfig     `mapstructure:"confirmation" yaml:"confirmation"`
 	Category        string                  `mapstructure:"category" yaml:"category"`
 	RegisterInteger *RegisterIntegerConfig  `mapstructure:"register_integer" yaml:"register_integer"`
 	Name            string                  `mapstructure:"name" yaml:"name"`
