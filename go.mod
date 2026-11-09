@@ -4,13 +4,13 @@ go 1.27.3
 
 require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/itchyny/gojq v0.12.19
+	github.com/itchyny/gojq v0.12.20
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnmic v0.49.1
 	// Match gnmic v0.49.0's release commit: API v0.1.11 lacks RedactedDeepCopy.
 	github.com/openconfig/gnmic/pkg/api v0.1.12-0.20260916192211-ce0d4173630a
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
-	github.com/scrapli/scrapligo v1.4.3
+	github.com/scrapli/scrapligo v1.4.4
 	github.com/sirikothe/gotextfsm v1.2.0
 	github.com/spf13/viper v1.21.0
 	github.com/tidwall/gjson v1.20.0
@@ -40,7 +40,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
-	github.com/itchyny/timefmt-go v0.1.8 // indirect
+	github.com/itchyny/timefmt-go v0.1.9 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/gofork v1.7.6 // indirect
