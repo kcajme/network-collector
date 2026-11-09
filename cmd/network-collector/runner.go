@@ -232,7 +232,23 @@ func runScheduledDevicesContext(runContext context.Context, devices []DeviceConf
 		results = append(results, outcome.Value)
 	}
 	if stopped {
-		slog.Error("scheduled execution stopped before all devices completed", "failure_threshold", cfg.FailureThreshold, "canary_count", cfg.CanaryCount)
+		reason := "schedule_stopped"
+		failures := 0
+		for _, result := range results {
+			if result.failed {
+				failures++
+				if cfg.CanaryCount > 0 && result.index < cfg.CanaryCount {
+					reason = "canary_failed"
+				}
+			}
+		}
+		if reason != "canary_failed" && cfg.FailureThreshold > 0 && failures >= cfg.FailureThreshold {
+			reason = "failure_threshold_reached"
+		}
+		if runContext.Err() != nil {
+			reason = "interrupted"
+		}
+		slog.Error("scheduled execution stopped before all devices completed", "reason", reason, "failed_hosts", failures, "failure_threshold", cfg.FailureThreshold, "canary_count", cfg.CanaryCount)
 	}
 	return results, stopped
 }

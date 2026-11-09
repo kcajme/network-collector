@@ -1525,7 +1525,12 @@ ssh:
           expected_type: string
 ```
 
-The retry step keeps rerunning the command until validation passes, with the configured interval and attempt limit.
+The retry step keeps rerunning the command until validation passes, with the configured interval and attempt limit. Earlier failed
+validation attempts remain in the history but are marked recovered when a later
+attempt passes. They do not fail the host, stop its remaining steps, or trigger
+the canary gate/failure threshold. Exhausted retries and unrelated errors remain
+failures. Session logs and lifecycle events explicitly record retry recovery;
+scheduler stop logs include the stop reason.
 
 Validation steps can also run conditional actions after the final validation result:
 

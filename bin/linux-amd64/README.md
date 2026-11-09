@@ -26,12 +26,12 @@ Rebuild from the repository root with Go 1.27.3:
 
 ```sh
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOAMD64=v1 GOFLAGS=-mod=readonly \
-  go build -trimpath -ldflags="-s -w -X main.version=$(cat VERSION)-host-transcripts" \
+  go build -trimpath -ldflags="-s -w -X main.version=$(cat VERSION)-retry-recovery" \
   -o bin/linux-amd64/network-collector ./cmd/network-collector
 (cd bin/linux-amd64 && sha256sum network-collector > SHA256SUMS)
 ```
 
-This build reports `2.0.2-host-transcripts` and supports the bounded
+This build reports `2.0.2-retry-recovery` and supports the bounded
 `register_integer` capture documented in the repository README.
 
 Terminal runs prompt automatically when environment credentials are incomplete.
@@ -62,3 +62,5 @@ sets `type` once and omits host/group selectors to target every inventory host.
 
 Per-host session logs now include sanitized command responses by default,
 with clear step headings, attempt timestamps and blank lines.
+
+Recovered validation retries no longer count as host/canary failures.

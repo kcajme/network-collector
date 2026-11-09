@@ -1201,6 +1201,7 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 			continue
 		}
 		attempt := 0
+		var retryFailureIndices []int
 		stepExecutionFailed := false
 		for {
 			attempt++
@@ -1372,6 +1373,7 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 			finalResult = overall
 			finalValidationResults = results
 
+			attemptResultStart := len(*ctx.aggregated)
 			for idx, vres := range results {
 				if !ctx.jsonOut && ctx.consoleOutput {
 					jb, _ := json.MarshalIndent(vres, "", "  ")
@@ -1404,6 +1406,14 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 					break
 				}
 
+				// Track only failures from this validation attempt. Other step,
+				// drift, artifact and transport failures retain their own state.
+				for index, result := range results {
+					if result.Status == "fail" {
+						retryFailureIndices = append(retryFailureIndices, attemptResultStart+index)
+					}
+				}
+
 				interval := time.Duration(retryCfg.IntervalSeconds) * time.Second
 				if interval <= 0 {
 					interval = 60 * time.Second
@@ -1417,6 +1427,14 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 			}
 
 			break
+		}
+
+		if finalResult.Pass && finalResult.Status == "pass" && len(retryFailureIndices) > 0 {
+			for _, index := range retryFailureIndices {
+				(*ctx.aggregated)[index].Recovered = true
+			}
+			writeSessionf(ctx.sessionLog, "[step:%s] retry recovered after %d attempts; %d earlier validation failure(s) recovered\n", protectHumanOutput(stepName), attempt, len(retryFailureIndices))
+			ctx.events.emit(lifecycleEvent{Type: "step.retry_recovered", Hostname: ctx.hostname, IP: ctx.ip, Step: stepName, Data: map[string]interface{}{"attempts": attempt, "recovered_failures": len(retryFailureIndices)}})
 		}
 
 		if step.RegisterInteger != nil && !integerCaptured && !previewOnly {
