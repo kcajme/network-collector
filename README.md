@@ -933,7 +933,7 @@ Permissive mode emits a startup warning. Legacy fallback and host identity are
 independent; disabling host verification is never required merely because a
 device needs old key exchange or cipher algorithms.
 
-Upgrading from 2.0.2 or earlier: NETCONF sessions previously negotiated with
+Upgrading from 2.0.3 or earlier: NETCONF sessions previously negotiated with
 OpenSSH's own defaults and ignored `ssh_security.profile`. A NETCONF device
 that only connected because of those defaults now fails under `modern`; give
 it `profile: legacy` (or `auto`) in permissive mode, as above.
