@@ -121,7 +121,7 @@ func loadInventory(inventoryFile, configFile string) (*InventoryConfig, error) {
 	}
 
 	var inventory InventoryConfig
-	if err := safeyaml.Unmarshal(b, &inventory); err != nil {
+	if err := safeyaml.UnmarshalStrict(b, &inventory); err != nil {
 		return nil, err
 	}
 	inventory.baseDir = filepath.Dir(path)
@@ -176,7 +176,7 @@ func loadParsers(parsersFile, configFile string) (*ParsersConfig, error) {
 	}
 
 	var parsers ParsersConfig
-	if err := safeyaml.Unmarshal(b, &parsers); err != nil {
+	if err := safeyaml.UnmarshalStrict(b, &parsers); err != nil {
 		return nil, err
 	}
 	baseDir := filepath.Dir(path)

@@ -96,12 +96,12 @@ func TestEveryWorkflowUsesImmutableActionPins(t *testing.T) {
 func TestReleaseScansEveryConfiguredBinaryBeforePublication(t *testing.T) {
 	workflow := readRepositoryFile(t, ".github/workflows/release.yml")
 	requireContains(t, ".github/workflows/release.yml", workflow, map[string]string{
-		"race tests":                    "go test -race ./...",
-		"source vulnerability scan":     "govulncheck -show verbose ./...",
-		"test vulnerability scan":       "govulncheck -test -show verbose ./...",
-		"draft release construction":    "args: release --clean --draft",
-		"draft binary scanning":         "scripts/scan-release-binaries.sh dist",
-		"publication of verified draft": `gh release edit "${GITHUB_REF_NAME}" --draft=false`,
+		"race tests":                        "go test -race ./...",
+		"source vulnerability scan":         "govulncheck -show verbose ./...",
+		"test vulnerability scan":           "govulncheck -test -show verbose ./...",
+		"unprivileged release construction": "args: release --clean --skip=publish",
+		"draft binary scanning":             "scripts/scan-release-binaries.sh dist",
+		"publication of verified draft":     `gh release edit "${GITHUB_REF_NAME}" --draft=false`,
 	})
 	scanIndex := strings.Index(workflow, "scripts/scan-release-binaries.sh dist")
 	publishIndex := strings.Index(workflow, `gh release edit "${GITHUB_REF_NAME}" --draft=false`)
@@ -115,6 +115,9 @@ func TestReleaseScansEveryConfiguredBinaryBeforePublication(t *testing.T) {
 	requireContains(t, ".github/workflows/release.yml", workflow, map[string]string{
 		"OIDC signing": "id-token: write", "attestation upload": "attestations: write",
 		"all checksummed release artifacts": "subject-checksums: dist/checksums.txt",
+		"release upgrade notes":             `--notes-file dist/release-notes.md`,
+		"required reviewer guard":           `reviewers_configured=`,
+		"reviewer rule inspection":          `.type == "required_reviewers"`,
 	})
 	assertImmutableActionPins(t, ".github/workflows/release.yml", workflow)
 
@@ -140,7 +143,7 @@ func TestReleaseScansEveryConfiguredBinaryBeforePublication(t *testing.T) {
 		"toolchain metadata inspection":  `go version -m "$binary"`,
 		"binary vulnerability scanning":  `"$scanner" -mode binary "$binary"`,
 		"failure when no binaries exist": "no release binaries found",
-		"static Linux release binaries": `grep -q 'statically linked'`,
+		"static Linux release binaries":  `grep -q 'statically linked'`,
 	})
 }
 
@@ -228,5 +231,66 @@ func assertImmutableActionPins(t *testing.T, name, workflow string) {
 		if !shaPattern.MatchString(match[1]) {
 			t.Errorf("%s action is not pinned to a full commit SHA: %s", name, match[1])
 		}
+	}
+}
+
+func TestReleaseSeparatesBuildAndPublishPrivileges(t *testing.T) {
+	var workflow struct {
+		Permissions map[string]string `yaml:"permissions"`
+		Jobs        map[string]struct {
+			Needs       string            `yaml:"needs"`
+			Environment string            `yaml:"environment"`
+			Permissions map[string]string `yaml:"permissions"`
+			Steps       []struct {
+				Uses string                 `yaml:"uses"`
+				Run  string                 `yaml:"run"`
+				With map[string]interface{} `yaml:"with"`
+				Env  map[string]string      `yaml:"env"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal([]byte(readRepositoryFile(t, ".github/workflows/release.yml")), &workflow); err != nil {
+		t.Fatal(err)
+	}
+	if len(workflow.Permissions) != 1 || workflow.Permissions["contents"] != "read" {
+		t.Fatal("workflow must default to read-only")
+	}
+	build, ok := workflow.Jobs["build"]
+	if !ok {
+		t.Fatal("missing build job")
+	}
+	for _, permission := range build.Permissions {
+		if permission == "write" {
+			t.Fatal("build has write permission")
+		}
+	}
+	for _, step := range build.Steps {
+		if strings.HasPrefix(step.Uses, "actions/checkout@") && step.With["persist-credentials"] != false {
+			t.Fatal("checkout persists credentials")
+		}
+		for _, value := range step.Env {
+			if strings.Contains(value, "secrets.") {
+				t.Fatal("build receives a secret")
+			}
+		}
+	}
+	publish, ok := workflow.Jobs["publish"]
+	if !ok || publish.Needs != "build" || publish.Environment != "release" {
+		t.Fatal("publish must depend on verified build and release environment")
+	}
+	if publish.Permissions["contents"] != "write" {
+		t.Fatal("publish lacks scoped permission")
+	}
+	for _, step := range publish.Steps {
+		if strings.HasPrefix(step.Uses, "actions/checkout@") || strings.Contains(step.Uses, "goreleaser") || strings.Contains(step.Run, "go run ") {
+			t.Fatal("privileged publisher executes repository build code")
+		}
+	}
+}
+
+func TestDockerContextExcludesPrivateSecurityMaterial(t *testing.T) {
+	content := readRepositoryFile(t, ".dockerignore")
+	if !strings.Contains("\n"+content, "\n.security-private\n") {
+		t.Fatal("private security material enters Docker build context")
 	}
 }

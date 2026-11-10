@@ -17,8 +17,8 @@ require (
 	golang.org/x/crypto v0.58.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0
-	// Pin the HTTP/2 server security fix until it is available in a stable release.
-	google.golang.org/grpc v1.86.0-dev
+	// Stable release containing the HTTP/2 server security fix.
+	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
 )

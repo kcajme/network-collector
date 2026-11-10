@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gwoodwa1/network-collector/internal/securitymode"
 	"github.com/gwoodwa1/network-collector/pkg/credentials"
 	"github.com/gwoodwa1/network-collector/pkg/drivers/aristahttp"
 	"github.com/spf13/viper"
@@ -22,13 +23,13 @@ type HTTPConfig struct {
 }
 
 type HTTPConfigSet struct {
-	HTTP []HTTPConfig `mapstructure:"http"`
+	SecurityMode string       `mapstructure:"security_mode"`
+	HTTP         []HTTPConfig `mapstructure:"http"`
 }
 
 func init() {
 	viper.SetConfigName("config")
 	viper.AddConfigPath("./")
-	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
 		slog.Warn("unable to read config file", "error", err)
@@ -56,6 +57,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := securitymode.ValidateTransport(config.SecurityMode, false); err != nil {
+		slog.Error("invalid security policy", "error", err)
+		os.Exit(1)
+	}
+	for _, device := range config.HTTP {
+		if err := securitymode.ValidateTransport(config.SecurityMode, device.SkipTLS); err != nil {
+			slog.Error("invalid transport security", "error", err)
+			os.Exit(1)
+		}
+	}
 	for _, device := range config.HTTP {
 		hostname := strings.TrimSpace(device.Hostname)
 		ip := strings.TrimSpace(device.IP)

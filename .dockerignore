@@ -19,3 +19,8 @@ CHANGELOG.md
 LICENSE
 VERSION
 examples
+
+# Private security working material and local tools
+.security-private
+.cache
+tmp

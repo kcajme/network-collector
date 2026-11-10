@@ -1,6 +1,10 @@
 package hostkey
 
 import (
+	"github.com/scrapli/scrapligo/driver/options"
+	"github.com/scrapli/scrapligo/transport"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/scrapli/scrapligo/util"
@@ -29,5 +33,29 @@ func TestPolicyDefaultsAndValidation(t *testing.T) {
 	}
 	if _, err := New("accept-new", ""); err == nil {
 		t.Fatal("unknown policy accepted")
+	}
+}
+
+func TestVerifiedPolicyReenablesStrictKeyAtTransportBoundary(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "known_hosts")
+	if err := os.WriteFile(path, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"known_hosts", "pinned"} {
+		policy, err := New(mode, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		opts, err := policy.Apply([]util.Option{options.WithAuthNoStrictKey()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		args, err := transport.NewSSHArgs(opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !args.StrictKey || args.KnownHostsFile != path {
+			t.Fatalf("policy not enforced: %+v", args)
+		}
 	}
 }

@@ -4,6 +4,45 @@ All notable changes to Network Collector are documented here.
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-11-10
+
+### Security
+
+- Restrict SSH platforms to bundled definitions, preserve `cisco_ios` as an
+  alias for `cisco_iosxe`, and reject unsafe SSH host arguments.
+- Enforce explicit OpenSSH key-exchange, cipher and MAC profiles. Verified
+  host-key policies explicitly enable checking; pinned policy excludes global
+  known-hosts files and known-hosts commands.
+- Reject unknown workbook, inventory and parser schema keys. Limit workbook
+  environment overrides to the documented `FAIL_ON_FAIL` binding.
+- Expand vendor-secret redaction and sanitize approval prompts and logs.
+  Channel transcripts now retain byte counts rather than raw stream contents.
+- Bind resume to execution identity, runtime bindings and configuration/file
+  dependencies. Refuse ambiguous or output-dependent resumes rather than
+  replaying completed mutations or skipping unfinished work.
+- Require an administrator syslog destination allowlist and verified TLS in
+  production. Enforce production transport policy in helper CLIs.
+- Separate read-only release builds/scans from artifact-only publication,
+  disable checkout credential persistence, and require configured release
+  reviewers before publication.
+- Replace development gRPC with stable v1.85.0 containing the original
+  HTTP/2 security fix. Exclude private audit material from Docker contexts.
+
+### Compatibility and upgrade notes
+
+- Custom SSH platform paths and URLs are no longer accepted.
+- Unknown configuration keys now fail loading; correct typos before upgrading.
+- `session_transcript` no longer writes raw channel data. Protected command
+  output remains available through the normal output settings.
+- Resume requires manifest format 2; previous run directories cannot resume.
+  Runtime-selected payload paths and completed mutations whose output or
+  dependent actions cannot be reconstructed require manual reconciliation.
+- Configure `NETWORK_COLLECTOR_SYSLOG_ALLOWED_ADDRESSES` with exact
+  `host:port` endpoints. Plaintext syslog/helper transports require explicit
+  `security_mode: permissive`.
+
+### Monitoring
+
 - Keep cross-device username defaults tied to successful monitor connections;
   failed attempts retain their username only for retries on the same device.
 - Add a separate SSH host-key mismatch confirmation flow during monitor

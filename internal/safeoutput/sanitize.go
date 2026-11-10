@@ -4,13 +4,21 @@ package safeoutput
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 var sensitivePatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)\b(password|passwd|encrypted-password|secret|community|token|authentication-key|auth-key|md5-key|key-string)\b(\s+(?:[0579]\s+)?|\s*[:=]\s*)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
+	regexp.MustCompile(`(?im)((?:^|[ \t])key)\b(\s+(?:[0-9]\s+)?)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
+	regexp.MustCompile(`(?im)\b((?:tacacs-server|radius-server)\s+key)\b(\s+(?:[0-9]\s+)?)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
+	regexp.MustCompile(`(?im)\b(pre-shared-key)\b(\s+(?:local\s+|remote\s+)?(?:[0-9]\s+)?)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
+	regexp.MustCompile(`(?im)\b(authentication-key)\b(\s+\d+\s+(?:md5|sha1|sha256|sha512)\s+)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
+	regexp.MustCompile(`(?im)\b(auth)\b(\s+(?:md5|sha|sha-\d+|sha\d+)\s+)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
+	regexp.MustCompile(`(?im)\b(priv)\b(\s+(?:des|3des|aes(?:\s+(?:128|192|256))?)\s+)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
+	regexp.MustCompile(`(?i)\b(password|passwd|encrypted-password|secret|community|token|authentication-key|auth-key|md5-key|key-string)\b(\s+(?:[0-9]\s+)?|\s*[:=]\s*)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
 	regexp.MustCompile(`(?i)\b(authorization|proxy-authorization)\b(\s*:\s*)(?:basic|bearer)\s+([^\s,;]+)`),
 	regexp.MustCompile(`(?is)-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----`),
 	regexp.MustCompile(`(?is)<(?:password|secret|community|token)(?:\s[^>]*)?>.*?</(?:password|secret|community|token)>`),
@@ -104,4 +112,26 @@ func (writer *sanitizingWriter) Write(content []byte) (int, error) {
 		return 0, io.ErrShortWrite
 	}
 	return len(content), nil
+}
+
+// Transcript data is an arbitrary byte stream, including echoed credentials.
+// Only byte counts are retained; command outputs use the normal protected path.
+type transcriptWriter struct {
+	mu          sync.Mutex
+	destination io.Writer
+}
+
+func NewTranscriptWriter(destination io.Writer) io.Writer {
+	return &transcriptWriter{destination: destination}
+}
+func (w *transcriptWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(p) == 0 {
+		return 0, nil
+	}
+	if _, err := fmt.Fprintf(w.destination, "[channel data omitted; bytes=%d]\n", len(p)); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }

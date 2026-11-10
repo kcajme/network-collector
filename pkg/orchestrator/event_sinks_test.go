@@ -204,7 +204,7 @@ func TestSyslogSinkUDP(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	sink, err := NewSyslogSink("udp", listener.LocalAddr().String(), "collector-test", time.Second)
+	sink, err := NewSyslogSinkWithPolicy("udp", listener.LocalAddr().String(), "collector-test", time.Second, []string{listener.LocalAddr().String()}, true)
 	if err != nil {
 		t.Fatal(err)
 	}

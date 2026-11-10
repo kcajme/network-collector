@@ -267,7 +267,7 @@ func main() {
 	// lookup or a device connection.
 	resumeDir = strings.TrimSpace(resumeDir)
 	var resumeManifest runManifest
-	var resumeCompleted map[string]bool
+	var resumeCompleted map[string]string
 	if resumeDir != "" {
 		resolved, resolveErr := filepath.Abs(resumeDir)
 		if resolveErr != nil {
@@ -425,7 +425,7 @@ func main() {
 		slog.Info("recording lifecycle events", "path", eventPath)
 	}
 	for index, sinkConfig := range config.Output.EventSinks {
-		sink, sinkErr := newNetworkEventSink(sinkConfig)
+		sink, sinkErr := newNetworkEventSink(sinkConfig, config.SecurityMode)
 		if sinkErr != nil {
 			slog.Error("error configuring lifecycle event sink", "index", index, "type", sinkConfig.Type, "error", sinkErr)
 			os.Exit(1)

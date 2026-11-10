@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/scrapli/scrapligo/driver/options"
+	"github.com/scrapli/scrapligo/transport"
 	"github.com/scrapli/scrapligo/util"
 )
 
@@ -53,6 +54,18 @@ func (value policy) Apply(existing []util.Option) ([]util.Option, error) {
 	case "insecure":
 		return append(result, options.WithAuthNoStrictKey()), nil
 	case "known_hosts", "pinned":
+		result = append(result, func(o interface{}) error {
+			args, ok := o.(*transport.SSHArgs)
+			if !ok {
+				return util.ErrIgnoredOption
+			}
+			args.StrictKey = true
+			return nil
+		})
+		if value.name == "pinned" {
+			result = append(result, options.WithSystemTransportOpenArgs([]string{"-o", "GlobalKnownHostsFile=/dev/null", "-o", "KnownHostsCommand=none"}))
+		}
+
 		if value.knownHostsFile != "" {
 			return append(result, options.WithSSHKnownHostsFile(value.knownHostsFile)), nil
 		}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gwoodwa1/network-collector/internal/securitymode"
 	"github.com/gwoodwa1/network-collector/pkg/credentials"
 	"github.com/gwoodwa1/network-collector/pkg/drivers/gnmi"
 	"github.com/spf13/viper"
@@ -42,13 +43,13 @@ type GNMISubscribeConfig struct {
 }
 
 type GNMIConfigSet struct {
-	GNMI []GNMIConfig `mapstructure:"gnmi"`
+	SecurityMode string       `mapstructure:"security_mode"`
+	GNMI         []GNMIConfig `mapstructure:"gnmi"`
 }
 
 func init() {
 	viper.SetConfigName("config")
 	viper.AddConfigPath("./")
-	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
 		slog.Warn("unable to read config file", "error", err)
@@ -78,6 +79,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := securitymode.ValidateTransport(config.SecurityMode, false); err != nil {
+		slog.Error("invalid security policy", "error", err)
+		os.Exit(1)
+	}
+	for _, device := range config.GNMI {
+		if err := securitymode.ValidateTransport(config.SecurityMode, insecureForTesting || device.Insecure || device.SkipTLS); err != nil {
+			slog.Error("invalid transport security", "error", err)
+			os.Exit(1)
+		}
+	}
 	for _, device := range config.GNMI {
 		hostname := strings.TrimSpace(device.Hostname)
 		ip := strings.TrimSpace(device.IP)

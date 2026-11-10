@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"regexp"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 	"github.com/scrapli/scrapligo/driver/network"
 	"github.com/scrapli/scrapligo/driver/options"
 	"github.com/scrapli/scrapligo/platform"
+	"github.com/scrapli/scrapligo/transport"
 	"github.com/scrapli/scrapligo/util"
 )
 
@@ -223,7 +225,13 @@ func (c *Client) Connect(host, username, password, driverName string) error {
 		return err
 	}
 
-	trimmedDriverName := strings.TrimSpace(driverName)
+	trimmedDriverName, err := bundledPlatform(driverName)
+	if err != nil {
+		return err
+	}
+	if err := validateHost(host); err != nil {
+		return err
+	}
 	trimmedHost := strings.TrimSpace(host)
 	profile, err := normalizeSecurityProfile(c.securityProfile)
 	if err != nil {
@@ -402,12 +410,7 @@ func (c *Client) connectWithProfile(host, username, password, driverName, profil
 	if err != nil {
 		return err
 	}
-	if profile == "compatibility" || profile == "legacy" {
-		platformOptions = append(platformOptions,
-			options.WithStandardTransportExtraKexs([]string{"diffie-hellman-group14-sha1", "diffie-hellman-group-exchange-sha1", "diffie-hellman-group1-sha1"}),
-			options.WithStandardTransportExtraCiphers([]string{"aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-cbc", "aes192-cbc", "aes256-cbc", "3des-cbc"}),
-		)
-	}
+	platformOptions = append(platformOptions, options.WithTransportType(transport.SystemTransport), options.WithSystemTransportOpenArgs(algorithmArgs(profile)))
 
 	platformConfig, err := platform.NewPlatform(
 		driverName,
@@ -519,4 +522,41 @@ func closeSSHSession(session sshSession) (err error) {
 		}
 	}()
 	return session.Close()
+}
+
+// Platform names never resolve implicitly to files or URLs.
+func bundledPlatform(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "cisco_ios" {
+		name = platform.CiscoIosxe
+	}
+	for _, allowed := range platform.GetPlatformNames() {
+		if name == allowed {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("unsupported SSH platform %q: use a bundled platform name", name)
+}
+
+func validateHost(host string) error {
+	host = strings.TrimSpace(host)
+	if net.ParseIP(host) != nil {
+		return nil
+	}
+	if len(host) == 0 || len(host) > 253 || host[0] == '-' || !regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$`).MatchString(host) {
+		return fmt.Errorf("invalid SSH host: expected an IP address or hostname")
+	}
+	return nil
+}
+
+func algorithmArgs(profile string) []string {
+	kex := "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group14-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512"
+	ciphers := "chacha20-poly1305@openssh.com,aes128-gcm@openssh.com,aes256-gcm@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr"
+	macs := "hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha2-256,hmac-sha2-512"
+	if profile == "legacy" || profile == "compatibility" {
+		kex += ",diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha1,diffie-hellman-group1-sha1"
+		ciphers += ",aes128-cbc,aes192-cbc,aes256-cbc,3des-cbc"
+		macs += ",hmac-sha1"
+	}
+	return []string{"-o", "KexAlgorithms=" + kex, "-o", "Ciphers=" + ciphers, "-o", "MACs=" + macs}
 }

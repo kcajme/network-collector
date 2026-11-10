@@ -9,15 +9,15 @@ hosts:
     labels: {site: london, role: edge, environment: lab, maintenance: "false"}
   - name: device-ios-01
     ip: 192.0.2.69
-    type: cisco_ios
+    type: cisco_iosxe
     labels: {site: manchester, role: access, environment: lab, maintenance: "false", wave: canary}
   - name: device-ios-02
     ip: 192.0.2.70
-    type: cisco_ios
+    type: cisco_iosxe
     labels: {site: manchester, role: access, environment: lab, maintenance: "false", wave: standard}
   - name: device-ios-03
     ip: 192.0.2.71
-    type: cisco_ios
+    type: cisco_iosxe
     labels: {site: manchester, role: access, environment: lab, maintenance: "true", wave: hold}
   - name: xr-router-1
     ip: 192.0.2.13

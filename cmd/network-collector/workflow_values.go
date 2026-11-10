@@ -161,6 +161,8 @@ func requestApproval(ctx *stepExecutionContext, config ApprovalConfig, stepName 
 	if message == "" {
 		message = "Approve this workflow step?"
 	}
+	message = protectHumanOutput(message)
+	stepName = protectHumanOutput(stepName)
 	if ctx.approveAll {
 		writeSessionf(ctx.sessionLog, "[step:%s] approval granted by --approve-all: %s\n", stepName, message)
 		return true, nil
@@ -177,7 +179,7 @@ func requestApproval(ctx *stepExecutionContext, config ApprovalConfig, stepName 
 	if writer == nil {
 		writer = io.Discard
 	}
-	fmt.Fprintf(writer, "device=%s step=%s %s [y/N] ", ctx.hostname, stepName, message)
+	fmt.Fprintf(writer, "device=%s step=%s %s [y/N] ", protectHumanOutput(ctx.hostname), stepName, message)
 	var response approvalAnswer
 	if config.TimeoutSeconds > 0 {
 		answers := make(chan approvalAnswer, 1)

@@ -880,15 +880,20 @@ ssh_security:
 
 Available profiles:
 
-- `compatibility`: preserves the previous cipher and key-exchange behavior.
-- `auto`: tries the SSH library's standard algorithm set first, then retries with legacy compatibility algorithms only after a recognizable algorithm-negotiation failure.
-- `modern`: uses only the SSH library's standard algorithm set and never falls back.
-- `legacy`: explicitly enables the compatibility algorithm set and appears in the startup warning summary.
+- `compatibility`: enables the same explicit legacy cipher, MAC and key-exchange set as `legacy`.
+- `auto`: tries the explicit modern OpenSSH algorithm set first, then retries with the legacy set only after a recognizable algorithm-negotiation failure.
+- `modern`: constrains OpenSSH to the collector's explicit modern KEX, cipher and MAC allowlists and never falls back.
+- `legacy`: explicitly adds legacy algorithms to the modern set and appears in the startup warning summary.
 
 Auto fallback never occurs for authentication failures, host-key failures, timeouts, DNS errors, or refused connections.
 
 If `known_hosts_file` is omitted, ScrapliGo checks its supported user and
-system defaults. `pinned` requires an explicit known-hosts file.
+system defaults. `pinned` requires an explicit known-hosts file and disables global known-hosts files and known-hosts commands.
+
+SSH device `type` must be a bundled ScrapliGo platform name. `cisco_ios` is
+accepted as an alias for `cisco_iosxe`. Custom platform paths and URLs are not
+supported. Profiles retain system OpenSSH and interactive passcode support;
+unsupported local algorithm names fail the connection rather than weakening policy.
 
 For a temporary lab or approved legacy migration, the entire workbook must
 explicitly opt out of production enforcement. Keep host verification enabled
@@ -2082,3 +2087,45 @@ Example equality checks added in `config.yaml`:
 - Boolean equality: `condition: eq`, `expected: true`, `expected_type: bool`
 - Regex match against an extracted value: `condition: matches`, `expected: '^\d+\.\d+\.\d+$'`
 - Length check: `condition: gte`, `expected: 3`, `expected_type: length`
+
+
+### Security configuration and resume compatibility
+
+Workbook, inventory and parser schema keys are checked strictly, including nested
+steps. Arbitrary keys remain supported inside variable and other documented data
+maps. Only `FAIL_ON_FAIL` overrides a workbook setting through environment binding;
+`SECURITY_MODE`, `INVENTORY_FILE` and `PARSERS_FILE` do not replace explicit settings.
+Administrator environment controls for credentials and destination policies remain
+available.
+
+`session_transcript: true` records channel byte counts, never raw channel bytes.
+Normal command output uses the protected output path and its vendor-secret
+redaction. This prevents echoed credentials split across stream writes from entering
+the transcript. Redaction supports common formats; avoid collecting unnecessary
+secrets even when protected output is enabled.
+
+Resume requires manifest format 2. Older run directories cannot be resumed.
+Execution identities include structural location and branch/iteration context.
+Changed runtime variable bindings stop resume rather than replaying or skipping a
+different mutation. Completed mutations that register output, validate it, perform
+drift checks or have follow-up actions stop resume for manual reconciliation,
+because their output and downstream completion cannot be reconstructed safely. Manifests bind resolved execution inputs and imported,
+variable, parser and static NETCONF payload files. A workflow using runtime-selected
+payload-file paths can run normally but cannot resume; use static paths or inline
+payloads for resumable workflows. Changes to inputs require a new run and review of
+any previously uncertain mutations.
+
+Syslog sinks require an administrator allowlist of exact `host:port` endpoints in
+`NETWORK_COLLECTOR_SYSLOG_ALLOWED_ADDRESSES` (comma or whitespace separated).
+Internal collector addresses may be explicitly allowed. The default transport is
+TLS with certificate verification; production mode rejects UDP and plaintext TCP.
+Those transports require explicit permissive mode as well as the allowlist.
+The RESTCONF, Arista HTTP and gNMI helper CLIs also default to production mode and
+require `security_mode: permissive` before accepting insecure TLS/plaintext options.
+
+Release builds and scans run with read-only repository permissions. A separate
+publisher consumes the verified archives without checking out or executing build
+code. Repository administrators must configure the GitHub `release` environment
+with required reviewers and permitted release tags; naming the environment in YAML
+alone does not establish those protections. Publishing fails closed if the
+reviewer-rule check is missing, fails, or finds no required reviewers.

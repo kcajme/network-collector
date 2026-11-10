@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gwoodwa1/network-collector/internal/safeoutput"
 	"github.com/gwoodwa1/network-collector/pkg/drivers/ssh"
 	"github.com/gwoodwa1/network-collector/pkg/orchestrator"
 )
@@ -30,7 +31,7 @@ func runSSHDevice(index, occurrence int, device DeviceConfig, config Config, use
 	return runSSHDeviceContext(context.Background(), index, occurrence, device, config, username, password, rsaAuth, jsonOut, pretty, approveAll, approvals, approvalWriter, parsers, variables, runDir, events, nil, nil)
 }
 
-func runSSHDeviceContext(runContext context.Context, index, occurrence int, device DeviceConfig, config Config, username, password string, rsaAuth *rsaTokenAuth, jsonOut, pretty, approveAll bool, approvals *approvalInput, approvalWriter io.Writer, parsers map[string]ParserModuleConfig, variables map[string]string, runDir string, events *eventDispatcher, journal *runJournal, resumeCompleted map[string]bool) (result deviceRunResult) {
+func runSSHDeviceContext(runContext context.Context, index, occurrence int, device DeviceConfig, config Config, username, password string, rsaAuth *rsaTokenAuth, jsonOut, pretty, approveAll bool, approvals *approvalInput, approvalWriter io.Writer, parsers map[string]ParserModuleConfig, variables map[string]string, runDir string, events *eventDispatcher, journal *runJournal, resumeCompleted map[string]string) (result deviceRunResult) {
 	startedAt := time.Now()
 	hostname := strings.TrimSpace(device.Hostname)
 	ip := strings.TrimSpace(device.IP)
@@ -83,7 +84,7 @@ func runSSHDeviceContext(runContext context.Context, index, occurrence int, devi
 	}
 	channelLog := io.Discard
 	if config.Output.SessionTranscript {
-		channelLog = sessionLog
+		channelLog = safeoutput.NewTranscriptWriter(sessionLog)
 	}
 	opts = append(opts, ssh.WithChannelLog(channelLog))
 
@@ -139,6 +140,7 @@ func runSSHDeviceContext(runContext context.Context, index, occurrence int, devi
 		gnmiActionBudget: &gnmiDeviceActionBudget{},
 		journal:          journal,
 		occurrence:       occurrence,
+		executionPath:    fmt.Sprintf("device:%d", index),
 		resumeCompleted:  resumeCompleted,
 	}
 	if rsaAuth != nil {
