@@ -148,6 +148,8 @@ profiles:
   edge: {username: junos-automation, password: replace-me}
 ```
 
+Unknown keys are rejected, so a typo such as `pasword:` or `profile:` fails
+loading instead of silently yielding an empty password or an unused profile.
 Assign a profile to an inventory host with `credential_profile: datacenter`.
 First-class provider configurations are included for
 [HashiCorp Vault](examples/credential-providers/vault.yaml),
@@ -878,22 +880,39 @@ ssh_security:
   known_hosts_file: ~/.ssh/known_hosts # optional
 ```
 
+The profile and host-key policy apply to every session that runs the system
+OpenSSH client: CLI `ssh` targets, NETCONF targets and steps, and the NETCONF
+half of `facts` collection. A device's `ssh_security` therefore governs its
+NETCONF `edit-config` and `commit` sessions as well as its CLI commands.
+
 Available profiles:
 
 - `compatibility`: enables the same explicit legacy cipher, MAC and key-exchange set as `legacy`.
-- `auto`: tries the explicit modern OpenSSH algorithm set first, then retries with the legacy set only after a recognizable algorithm-negotiation failure.
-- `modern`: constrains OpenSSH to the collector's explicit modern KEX, cipher and MAC allowlists and never falls back.
-- `legacy`: explicitly adds legacy algorithms to the modern set and appears in the startup warning summary.
+- `auto`: tries the explicit modern OpenSSH algorithm set first, then retries with the legacy set only after a recognizable algorithm-negotiation failure (including "no matching host key type").
+- `modern`: constrains OpenSSH to the collector's explicit modern KEX, cipher and MAC allowlists and never falls back. When the local OpenSSH supports them, the post-quantum hybrid key exchanges (`mlkem768x25519-sha256`, `sntrup761x25519-sha512`) are offered first.
+- `legacy`: explicitly adds legacy algorithms to the modern set and appears in the startup warning summary. It also re-enables SHA-1 `ssh-rsa` host keys, which OpenSSH 8.8 and later no longer accept by default but many older devices still present.
 
 Auto fallback never occurs for authentication failures, host-key failures, timeouts, DNS errors, or refused connections.
 
+The baseline algorithm lists use only names that OpenSSH 7.4 and later
+recognise, so they work on older clients such as RHEL 8 (OpenSSH 8.0) and
+Ubuntu 20.04 (8.2). Newer names (the post-quantum hybrids and `ssh-rsa`) are
+added only after the collector runs `ssh -Q kex` / `ssh -Q key` against the
+same `ssh` binary on `PATH`; OpenSSH refuses to start when given an algorithm
+name it does not know, so an unsupported name is omitted rather than breaking
+the connection. The result is cached per `ssh` binary for the life of the
+process. This probe is the only process the collector starts outside
+administrator-configured credential helpers.
+
 If `known_hosts_file` is omitted, ScrapliGo checks its supported user and
-system defaults. `pinned` requires an explicit known-hosts file and disables global known-hosts files and known-hosts commands.
+system defaults. `pinned` requires an explicit known-hosts file and disables
+global known-hosts files. OpenSSH is always started with `-F /dev/null`, so
+no `ssh_config` (including a `KnownHostsCommand`) can add another source of
+trusted host keys under any policy.
 
 SSH device `type` must be a bundled ScrapliGo platform name. `cisco_ios` is
 accepted as an alias for `cisco_iosxe`. Custom platform paths and URLs are not
-supported. Profiles retain system OpenSSH and interactive passcode support;
-unsupported local algorithm names fail the connection rather than weakening policy.
+supported. Profiles retain system OpenSSH and interactive passcode support.
 
 For a temporary lab or approved legacy migration, the entire workbook must
 explicitly opt out of production enforcement. Keep host verification enabled
@@ -913,6 +932,11 @@ ssh:
 Permissive mode emits a startup warning. Legacy fallback and host identity are
 independent; disabling host verification is never required merely because a
 device needs old key exchange or cipher algorithms.
+
+Upgrading from 2.0.2 or earlier: NETCONF sessions previously negotiated with
+OpenSSH's own defaults and ignored `ssh_security.profile`. A NETCONF device
+that only connected because of those defaults now fails under `modern`; give
+it `profile: legacy` (or `auto`) in permissive mode, as above.
 
 ### Custom SSH platform definitions
 

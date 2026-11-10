@@ -119,6 +119,9 @@ and [junos-routing-monitor's](../junos-routing-monitor/README.md#providing-devic
 own documentation for every per-device field, including each section's own `interval:`).
 At least one of the two sections must be present; either can be omitted if that run is
 single-platform.
+Unknown keys are rejected in both sections and at the top level, so a field from the
+other platform's schema (for example `tables:` under `cisco_iosxr:`) fails startup
+rather than being silently ignored.
 
 ```yaml
 interval: 30s

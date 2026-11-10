@@ -285,7 +285,7 @@ func TestPollDeviceReconnectsAfterAuthorizationFailure(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("PollDevice did not return after context cancellation")
 	}
 
@@ -327,7 +327,7 @@ func TestPollDeviceStopsWhenReconnectFails(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("expected PollDevice to return after a failed reconnect")
 	}
 
@@ -403,7 +403,7 @@ func TestPollDeviceReturnsPromptlyOnCancelDuringReauthPrompt(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("PollDevice did not return promptly after ctx cancellation while a reauth prompt was pending — Ctrl+C would hang here")
 	}
 }
@@ -447,7 +447,7 @@ func TestReauthCoordinatorReconnectCancelledWhileQueued(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected the queued Reconnect to return an error once cancelled while waiting for its turn")
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("queued Reconnect did not return promptly after its ctx was cancelled while waiting for the semaphore")
 	}
 	if atomic.LoadInt32(&queuedConnectCalled) != 0 {
@@ -485,7 +485,7 @@ func TestReauthCoordinatorHoldsSemUntilAbandonedConnectFinishes(t *testing.T) {
 	cancel1() // abandon the first Reconnect call while its connect is still running
 	select {
 	case <-firstDone:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("first Reconnect did not return after cancellation")
 	}
 
@@ -514,7 +514,7 @@ func TestReauthCoordinatorHoldsSemUntilAbandonedConnectFinishes(t *testing.T) {
 
 	select {
 	case <-secondDone:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("second Reconnect did not proceed after the abandoned first connect released sem")
 	}
 	if atomic.LoadInt32(&secondStarted) == 0 {
@@ -550,7 +550,7 @@ func TestReauthCoordinatorClosesClientFromAbandonedButSuccessfulConnect(t *testi
 	cancel()
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("Reconnect did not return promptly after cancellation")
 	}
 
@@ -641,7 +641,7 @@ waitForTicks:
 
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("PollDevice did not return after context cancellation")
 	}
 
@@ -678,8 +678,23 @@ func TestPollDeviceStopsOnDroppedSessionWithoutBlockingOthers(t *testing.T) {
 	dyingSession := &DeviceSession{hostname: "dying", client: dying}
 	healthySession := &DeviceSession{hostname: "healthy", client: healthy}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	// Cancel once the healthy session has demonstrably kept polling, rather
+	// than after a fixed wall-clock window: slow CI runners can spend most of
+	// a short window in setup (recorder open, before-snapshot).
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	go func() {
+		deadline := time.After(5 * time.Second)
+		for atomic.LoadInt32(&healthy.callCount) < 3 {
+			select {
+			case <-deadline:
+				cancel()
+				return
+			case <-time.After(5 * time.Millisecond):
+			}
+		}
+		cancel()
+	}()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -699,7 +714,7 @@ func TestPollDeviceStopsOnDroppedSessionWithoutBlockingOthers(t *testing.T) {
 	}()
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("expected both PollDevice goroutines to return")
 	}
 

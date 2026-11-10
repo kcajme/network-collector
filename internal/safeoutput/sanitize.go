@@ -11,17 +11,47 @@ import (
 	"sync"
 )
 
+// Shared fragments. A type number ("7", "10") and/or an encoding qualifier
+// ("encrypted", Junos "ascii-text") can sit between a keyword and the
+// secret; both must be consumed so the secret itself is what gets redacted.
+const (
+	secretValue     = `("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`
+	secretQualifier = `(?:(?:encrypted|ascii-text|hexadecimal|cipher|hidden|clear|unencrypted|sha512|sha256)\s+)?`
+)
+
 var sensitivePatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?im)((?:^|[ \t])key)\b(\s+(?:[0-9]\s+)?)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
-	regexp.MustCompile(`(?im)\b((?:tacacs-server|radius-server)\s+key)\b(\s+(?:[0-9]\s+)?)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
-	regexp.MustCompile(`(?im)\b(pre-shared-key)\b(\s+(?:local\s+|remote\s+)?(?:[0-9]\s+)?)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
-	regexp.MustCompile(`(?im)\b(authentication-key)\b(\s+\d+\s+(?:md5|sha1|sha256|sha512)\s+)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
-	regexp.MustCompile(`(?im)\b(auth)\b(\s+(?:md5|sha|sha-\d+|sha\d+)\s+)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
-	regexp.MustCompile(`(?im)\b(priv)\b(\s+(?:des|3des|aes(?:\s+(?:128|192|256))?)\s+)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
-	regexp.MustCompile(`(?i)\b(password|passwd|encrypted-password|secret|community|token|authentication-key|auth-key|md5-key|key-string)\b(\s+(?:[0-9]\s+)?|\s*[:=]\s*)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;]+)`),
+	regexp.MustCompile(`(?im)\b((?:tacacs-server|radius-server)\s+key)\b(\s+(?:\d{1,2}\s+)?)` + secretValue),
+	regexp.MustCompile(`(?im)\b(pre-shared-key)\b(\s+(?:local\s+|remote\s+)?(?:\d{1,2}\s+)?` + secretQualifier + `)` + secretValue),
+	regexp.MustCompile(`(?im)\b(authentication-key)\b(\s+\d+\s+(?:md5|sha1|sha256|sha512)\s+(?:\d{1,2}\s+)?)` + secretValue),
+	regexp.MustCompile(`(?im)\b(message-digest-key)\b(\s+\d+\s+md5\s+(?:\d{1,2}\s+)?)` + secretValue),
+	regexp.MustCompile(`(?im)\b(auth)\b(\s+(?:md5|sha|sha-\d+|sha\d+)\s+)` + secretValue),
+	regexp.MustCompile(`(?im)\b(priv)\b(\s+(?:des|3des|aes(?:\s+(?:128|192|256))?)\s+)` + secretValue),
+	regexp.MustCompile(`(?i)\b(password-encrypt|password|passwd|encrypted-password|secret|community|token|authentication-key|authentication-password|auth-key|md5-key|key-string|privacy-key|privacy-password)\b(\s+(?:\d{1,2}\s+)?` + secretQualifier + `|\s*[:=]\s*)` + secretValue),
 	regexp.MustCompile(`(?i)\b(authorization|proxy-authorization)\b(\s*:\s*)(?:basic|bearer)\s+([^\s,;]+)`),
 	regexp.MustCompile(`(?is)-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----`),
-	regexp.MustCompile(`(?is)<(?:password|secret|community|token)(?:\s[^>]*)?>.*?</(?:password|secret|community|token)>`),
+	regexp.MustCompile(`(?is)<(?:password|secret|community|token|pre-shared-key|encrypted-password|authentication-key|authentication-password|privacy-key|privacy-password|key-string|md5-key|auth-key)(?:\s[^>]*)?>.*?</(?:password|secret|community|token|pre-shared-key|encrypted-password|authentication-key|authentication-password|privacy-key|privacy-password|key-string|md5-key|auth-key)>`),
+}
+
+// A bare "key <value>" is a secret in tacacs/radius blocks and
+// "crypto isakmp key", but the same word also introduces harmless commands
+// ("key chain NAME", "crypto key generate rsa"). Those words are left
+// visible; anything else after "key" is treated as a secret. Matching stays
+// on one line so a key-chain ID cannot swallow the next line.
+var bareKey = regexp.MustCompile(`(?im)((?:^|[ \t])key)\b([ \t]+(?:\d{1,2}[ \t]+)?)` + secretValue)
+
+var bareKeySubcommands = map[string]bool{
+	"chain": true, "generate": true, "zeroize": true, "import": true, "export": true, "pubkey-chain": true,
+	"storage": true, "encrypt": true, "decrypt": true, "move": true, "lock": true, "unlock": true,
+}
+
+func redactBareKey(value string) string {
+	return bareKey.ReplaceAllStringFunc(value, func(match string) string {
+		parts := bareKey.FindStringSubmatch(match)
+		if bareKeySubcommands[strings.ToLower(parts[3])] {
+			return match
+		}
+		return parts[1] + parts[2] + "[REDACTED]"
+	})
 }
 
 // Quoted fields also occur inside diagnostic prose, outside a JSON document.
@@ -30,7 +60,7 @@ var quotedSecret = regexp.MustCompile(`(?i)("(?:password|passwd|secret|community
 func sensitiveKey(key string) bool {
 	key = strings.ToLower(strings.NewReplacer("_", "", "-", "").Replace(key))
 	switch key {
-	case "password", "passwd", "encryptedpassword", "secret", "community", "token", "accesstoken", "refreshtoken", "apikey", "clientsecret", "privatekey", "authorization", "proxyauthorization", "authenticationkey", "authkey", "md5key", "keystring":
+	case "password", "passwd", "encryptedpassword", "secret", "community", "token", "accesstoken", "refreshtoken", "apikey", "clientsecret", "privatekey", "authorization", "proxyauthorization", "authenticationkey", "authenticationpassword", "authkey", "md5key", "keystring", "presharedkey", "privacykey", "privacypassword":
 		return true
 	}
 	return false
@@ -58,6 +88,7 @@ func redactDocument(value interface{}) interface{} {
 
 func redactText(value string) string {
 	value = quotedSecret.ReplaceAllString(value, `${1}"[REDACTED]"`)
+	value = redactBareKey(value)
 	for _, pattern := range sensitivePatterns {
 		value = pattern.ReplaceAllString(value, "$1$2[REDACTED]")
 	}

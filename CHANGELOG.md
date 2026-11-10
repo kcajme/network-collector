@@ -10,12 +10,20 @@ All notable changes to Network Collector are documented here.
 
 - Restrict SSH platforms to bundled definitions, preserve `cisco_ios` as an
   alias for `cisco_iosxe`, and reject unsafe SSH host arguments.
-- Enforce explicit OpenSSH key-exchange, cipher and MAC profiles. Verified
-  host-key policies explicitly enable checking; pinned policy excludes global
-  known-hosts files and known-hosts commands.
+- Enforce explicit OpenSSH key-exchange, cipher and MAC profiles on both
+  CLI SSH and NETCONF sessions, including the `auto` modern-to-legacy
+  fallback and host validation. The modern profile prefers the post-quantum
+  hybrid key exchanges when the local OpenSSH supports them; the legacy
+  profile re-enables `ssh-rsa` host keys for older devices on OpenSSH 8.8+.
+  Verified host-key policies explicitly enable checking; pinned policy
+  excludes global known-hosts files, and `-F /dev/null` excludes any
+  configured known-hosts command, remaining compatible with OpenSSH 8.0+.
 - Reject unknown workbook, inventory and parser schema keys. Limit workbook
   environment overrides to the documented `FAIL_ON_FAIL` binding.
-- Expand vendor-secret redaction and sanitize approval prompts and logs.
+- Expand vendor-secret redaction (including Junos `ascii-text`/`$9$` keys,
+  `privacy-key` and XML secret elements, `password encrypted`, IOS XR type
+  10 and Arista `sha512` secrets, and OSPF `message-digest-key`) and sanitize
+  approval prompts and logs.
   Channel transcripts now retain byte counts rather than raw stream contents.
 - Bind resume to execution identity, runtime bindings and configuration/file
   dependencies. Refuse ambiguous or output-dependent resumes rather than
@@ -31,7 +39,11 @@ All notable changes to Network Collector are documented here.
 ### Compatibility and upgrade notes
 
 - Custom SSH platform paths and URLs are no longer accepted.
-- Unknown configuration keys now fail loading; correct typos before upgrading.
+- Unknown configuration keys now fail loading, including in routing-monitor
+  device files and the credentials file; correct typos before upgrading.
+- NETCONF sessions now honour `ssh_security.profile`. Devices that only
+  completed NETCONF negotiation through OpenSSH defaults may need `legacy`
+  or `auto` (permissive mode only).
 - `session_transcript` no longer writes raw channel data. Protected command
   output remains available through the normal output settings.
 - Resume requires manifest format 2; previous run directories cannot resume.

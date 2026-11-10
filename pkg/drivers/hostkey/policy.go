@@ -63,7 +63,11 @@ func (value policy) Apply(existing []util.Option) ([]util.Option, error) {
 			return nil
 		})
 		if value.name == "pinned" {
-			result = append(result, options.WithSystemTransportOpenArgs([]string{"-o", "GlobalKnownHostsFile=/dev/null", "-o", "KnownHostsCommand=none"}))
+			// Only the pinned file may vouch for the host. scrapligo already
+			// passes -F /dev/null, so no config can add a KnownHostsCommand;
+			// passing KnownHostsCommand=none here would also make OpenSSH
+			// older than 8.5 (RHEL 8, Ubuntu 20.04) reject the command line.
+			result = append(result, options.WithSystemTransportOpenArgs([]string{"-o", "GlobalKnownHostsFile=/dev/null"}))
 		}
 
 		if value.knownHostsFile != "" {

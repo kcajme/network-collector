@@ -21,9 +21,10 @@ func effectiveNETCONFPolicy(global SSHSecurityConfig, device DeviceConfig) netco
 	}
 	security := effectiveSSHSecurity(global, device.SSHSecurity)
 	return netconfConnectionPolicy{
-		timeout:        timeout,
-		hostKeyPolicy:  security.HostKeyPolicy,
-		knownHostsFile: security.KnownHostsFile,
+		timeout:         timeout,
+		securityProfile: security.Profile,
+		hostKeyPolicy:   security.HostKeyPolicy,
+		knownHostsFile:  security.KnownHostsFile,
 	}
 }
 

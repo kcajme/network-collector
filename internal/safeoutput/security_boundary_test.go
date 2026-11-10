@@ -33,3 +33,44 @@ func TestTranscriptNeverWritesChannelContents(t *testing.T) {
 		t.Fatal(output.String())
 	}
 }
+
+// Each form below previously redacted a qualifier word (or nothing) and left
+// the secret itself in the output.
+func TestQualifiedAndVendorSpecificCredentialForms(t *testing.T) {
+	for _, input := range []string{
+		`pre-shared-key ascii-text "$9$SYNTHETIC_CREDENTIAL"; ## SECRET-DATA`,
+		`pre-shared-key hexadecimal SYNTHETIC_CREDENTIAL;`,
+		"username admin password encrypted SYNTHETIC_CREDENTIAL",
+		"secret 10 $6$SYNTHETIC_CREDENTIAL",
+		"username admin role network-admin secret sha512 $6$SYNTHETIC_CREDENTIAL",
+		"ip ospf message-digest-key 1 md5 7 SYNTHETIC_CREDENTIAL",
+		"ip ospf message-digest-key 1 md5 SYNTHETIC_CREDENTIAL",
+		`privacy-key "$9$SYNTHETIC_CREDENTIAL";`,
+		`authentication-password "SYNTHETIC_CREDENTIAL";`,
+		"key config-key password-encrypt SYNTHETIC_CREDENTIAL",
+		"<pre-shared-key><ascii-text>$9$SYNTHETIC_CREDENTIAL</ascii-text></pre-shared-key>",
+		"<privacy-key>$9$SYNTHETIC_CREDENTIAL</privacy-key>",
+		"<encrypted-password>$6$SYNTHETIC_CREDENTIAL</encrypted-password>",
+	} {
+		if got := Sanitize(input); strings.Contains(got, "SYNTHETIC_CREDENTIAL") {
+			t.Errorf("credential retained: %q", got)
+		}
+	}
+}
+
+func TestBareKeyLeavesHarmlessCommandsReadable(t *testing.T) {
+	for _, input := range []string{
+		"key chain OSPF-KEYS",
+		"crypto key generate rsa modulus 2048",
+		"crypto key zeroize rsa",
+		"crypto key pubkey-chain rsa",
+	} {
+		if got := Sanitize(input); got != input {
+			t.Errorf("harmless line changed: %q -> %q", input, got)
+		}
+	}
+	// A key-chain ID must not pull the next line's content into the match.
+	if got := Sanitize("key 1\n key-string 7 SYNTHETIC_CREDENTIAL\n"); !strings.Contains(got, "key-string 7 [REDACTED]") {
+		t.Errorf("key-string not redacted on its own line: %q", got)
+	}
+}

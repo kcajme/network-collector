@@ -170,8 +170,15 @@ func TestAllCommandAndContainerBuildContractsRemainScannable(t *testing.T) {
 
 func TestHostProcessExecutionRemainsIsolatedToAdminCredentialProviders(t *testing.T) {
 	root := repositoryRoot(t)
-	allowedExecImport := filepath.FromSlash("pkg/credentials/enterprise.go")
-	foundAllowedImport := false
+	// Each entry is an explicitly reviewed process-execution boundary:
+	// enterprise.go runs administrator-configured credential helpers;
+	// sshprofile.go runs only `ssh -Q kex|key` against the same ssh binary
+	// scrapligo's system transport already spawns, to learn which algorithm
+	// names that client accepts.
+	allowedExecImports := map[string]bool{
+		filepath.FromSlash("pkg/credentials/enterprise.go"):        false,
+		filepath.FromSlash("pkg/drivers/sshprofile/sshprofile.go"): false,
+	}
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -207,10 +214,10 @@ func TestHostProcessExecutionRemainsIsolatedToAdminCredentialProviders(t *testin
 			if imported.Path.Value != `"os/exec"` {
 				continue
 			}
-			if relative != allowedExecImport {
-				t.Errorf("%s imports os/exec outside the administrator-controlled credential provider", relative)
+			if _, ok := allowedExecImports[relative]; !ok {
+				t.Errorf("%s imports os/exec outside the reviewed process-execution boundaries", relative)
 			} else {
-				foundAllowedImport = true
+				allowedExecImports[relative] = true
 			}
 		}
 		return nil
@@ -218,8 +225,10 @@ func TestHostProcessExecutionRemainsIsolatedToAdminCredentialProviders(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !foundAllowedImport {
-		t.Fatalf("%s no longer contains the explicitly reviewed process-execution boundary", allowedExecImport)
+	for allowed, found := range allowedExecImports {
+		if !found {
+			t.Errorf("%s no longer contains the explicitly reviewed process-execution boundary", allowed)
+		}
 	}
 }
 

@@ -56,12 +56,12 @@ type DeviceSpec struct {
 	// --devices file's cisco_iosxr and juniper_junos sections sit side by
 	// side in the same combined routing-monitor YAML — so reaching for
 	// vrf: while writing the juniper_junos section is a natural mistake to
-	// make, not a typo worth punishing. Plain yaml.Unmarshal silently drops
-	// unrecognized keys rather than erroring, so without this alias a
-	// device written with vrf: onboards looking fine (hostname/interfaces/
-	// neighbors all populate) while Tables stays silently empty — no VRF
-	// routing table, including the default-route (0/0) one, is ever
-	// polled, and nothing surfaces that failure. VRF and VRFs are both
+	// make, not a typo worth punishing. The file is decoded strictly, so
+	// without this alias vrf: would be rejected at load time; the alias
+	// accepts it instead. (Before strict decoding, an unrecognised vrf:
+	// was silently dropped, leaving Tables empty so no routing table,
+	// not even the default-route (0/0) one, was ever polled, with no
+	// error to show for it.) VRF and VRFs are both
 	// flexibleStringList, not string/[]string respectively, because either
 	// key's "obvious" shape can turn out to be the other in practice —
 	// vrf: [A, B] (a list under the singular key) is the real-world case
@@ -337,7 +337,7 @@ func LoadDeviceSpecs(path string) (specs []DeviceSpec, interval time.Duration, c
 		return nil, 0, CommandOverrides{}, nil, err
 	}
 	var doc DevicesDocument
-	if err := safeyaml.Unmarshal(b, &doc); err != nil {
+	if err := safeyaml.UnmarshalStrict(b, &doc); err != nil {
 		return nil, 0, CommandOverrides{}, nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	interval, err = ValidateDevicesDocument(path, doc)

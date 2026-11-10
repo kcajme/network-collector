@@ -63,10 +63,18 @@ func TestSystemSSHArgvEnforcesAlgorithmAndPinnedPolicy(t *testing.T) {
 				t.Fatal(err)
 			}
 			argv := string(content)
-			for _, required := range []string{"StrictHostKeyChecking=yes", "GlobalKnownHostsFile=/dev/null", "KnownHostsCommand=none", "UserKnownHostsFile=" + known} {
+			for _, required := range []string{"StrictHostKeyChecking=yes", "GlobalKnownHostsFile=/dev/null", "UserKnownHostsFile=" + known} {
 				if !strings.Contains(argv, required+"\n") {
 					t.Errorf("missing %q in argv %q", required, argv)
 				}
+			}
+			// -F /dev/null is what stops any ssh_config from adding a
+			// KnownHostsCommand or other verification source.
+			if !strings.Contains(argv, "-F\n/dev/null\n") {
+				t.Errorf("missing -F /dev/null in argv %q", argv)
+			}
+			if strings.Contains(argv, "KnownHostsCommand") {
+				t.Errorf("KnownHostsCommand breaks OpenSSH < 8.5: %q", argv)
 			}
 			for _, arg := range algorithmArgs(profile) {
 				if arg != "-o" && !strings.Contains(argv, arg+"\n") {

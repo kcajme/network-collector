@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gwoodwa1/network-collector/pkg/drivers/hostkey"
+	"github.com/gwoodwa1/network-collector/pkg/drivers/sshprofile"
 	"github.com/scrapli/scrapligo/driver/network"
 	"github.com/scrapli/scrapligo/driver/options"
 	"github.com/scrapli/scrapligo/platform"
@@ -56,6 +56,14 @@ func (s *scrapligoSSHSession) Close() error {
 	return s.driver.Close()
 }
 
+// Shared with the NETCONF driver so both protocols enforce one policy.
+var (
+	normalizeSecurityProfile    = sshprofile.Normalize
+	isAlgorithmNegotiationError = sshprofile.IsNegotiationError
+	validateHost                = sshprofile.ValidateHost
+	algorithmArgs               = sshprofile.Args
+)
+
 // Option is a type-safe option for configuring Client
 type Option func(*Client)
 
@@ -93,18 +101,6 @@ func WithHostKeyPolicy(policy, knownHostsFile string) Option {
 	}
 }
 
-func normalizeSecurityProfile(profile string) (string, error) {
-	profile = strings.ToLower(strings.TrimSpace(profile))
-	if profile == "" {
-		return "modern", nil
-	}
-	switch profile {
-	case "compatibility", "auto", "modern", "legacy":
-		return profile, nil
-	}
-	return "", fmt.Errorf("unsupported SSH security profile %q", profile)
-}
-
 func normalizeHostKeyPolicy(policy string) (string, error) {
 	policy = strings.ToLower(strings.TrimSpace(policy))
 	if policy == "" {
@@ -115,20 +111,6 @@ func normalizeHostKeyPolicy(policy string) (string, error) {
 		return policy, nil
 	}
 	return "", fmt.Errorf("unsupported SSH host key policy %q", policy)
-}
-
-func isAlgorithmNegotiationError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	markers := []string{"no common algorithm", "no common algo", "no matching key exchange", "no matching cipher", "unable to negotiate", "no common key exchange", "no common cipher"}
-	for _, marker := range markers {
-		if strings.Contains(message, marker) {
-			return true
-		}
-	}
-	return false
 }
 
 func (c *Client) SelectedSecurityProfile() string {
@@ -536,27 +518,4 @@ func bundledPlatform(name string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("unsupported SSH platform %q: use a bundled platform name", name)
-}
-
-func validateHost(host string) error {
-	host = strings.TrimSpace(host)
-	if net.ParseIP(host) != nil {
-		return nil
-	}
-	if len(host) == 0 || len(host) > 253 || host[0] == '-' || !regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$`).MatchString(host) {
-		return fmt.Errorf("invalid SSH host: expected an IP address or hostname")
-	}
-	return nil
-}
-
-func algorithmArgs(profile string) []string {
-	kex := "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group14-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512"
-	ciphers := "chacha20-poly1305@openssh.com,aes128-gcm@openssh.com,aes256-gcm@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr"
-	macs := "hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha2-256,hmac-sha2-512"
-	if profile == "legacy" || profile == "compatibility" {
-		kex += ",diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha1,diffie-hellman-group1-sha1"
-		ciphers += ",aes128-cbc,aes192-cbc,aes256-cbc,3des-cbc"
-		macs += ",hmac-sha1"
-	}
-	return []string{"-o", "KexAlgorithms=" + kex, "-o", "Ciphers=" + ciphers, "-o", "MACs=" + macs}
 }

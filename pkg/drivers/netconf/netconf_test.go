@@ -3,11 +3,14 @@ package netconf
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/gwoodwa1/network-collector/pkg/drivers/sshprofile"
 	"github.com/scrapli/scrapligo/response"
 	"github.com/scrapli/scrapligo/util"
 )
@@ -334,5 +337,88 @@ func TestNETCONFResultEnforcesExactResponseBoundary(t *testing.T) {
 	if output, err := netconfResult("RPC", over, nil); err == nil ||
 		!strings.Contains(err.Error(), "response exceeds") || output != "" {
 		t.Fatalf("limit+1 response was not rejected cleanly: length=%d error=%v", len(output), err)
+	}
+}
+
+// NETCONF runs the same system ssh as the CLI driver and carries
+// edit-config/commit, so it must receive the same algorithm and host-key
+// constraints. Capture the real argv scrapligo builds.
+func TestNETCONFSystemSSHArgvEnforcesProfileAndPinnedPolicy(t *testing.T) {
+	dir := t.TempDir()
+	capture := filepath.Join(dir, "argv")
+	script := "#!/bin/sh\n[ \"$1\" = -Q ] && exit 1\nprintf '%s\\n' \"$@\" > \"$SSH_TEST_CAPTURE\"\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "ssh"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	known := filepath.Join(dir, "known_hosts")
+	if err := os.WriteFile(known, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("SSH_TEST_CAPTURE", capture)
+	for _, profile := range []string{"modern", "legacy"} {
+		t.Run(profile, func(t *testing.T) {
+			_ = os.Remove(capture)
+			client := &ScrapligoNETCONF{}
+			err := client.Connect("192.0.2.1", "synthetic", "synthetic",
+				WithNetconfTimeouts(time.Second, time.Second),
+				WithSecurityProfile(profile),
+				WithHostKeyPolicy("pinned", known))
+			if err == nil {
+				t.Fatal("fake ssh unexpectedly connected")
+			}
+			content, err := os.ReadFile(capture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			argv := string(content)
+			required := []string{"StrictHostKeyChecking=yes", "GlobalKnownHostsFile=/dev/null", "UserKnownHostsFile=" + known, "netconf"}
+			for _, arg := range sshprofile.Args(profile) {
+				if arg != "-o" {
+					required = append(required, arg)
+				}
+			}
+			for _, want := range required {
+				if !strings.Contains(argv, want+"\n") {
+					t.Errorf("missing %q in argv %q", want, argv)
+				}
+			}
+			if profile == "modern" && (strings.Contains(argv, "group1-sha1") || strings.Contains(argv, "aes128-cbc")) {
+				t.Fatal("modern enables legacy algorithms")
+			}
+		})
+	}
+}
+
+func TestNETCONFRejectsUnsafeHostBeforeTransport(t *testing.T) {
+	for _, host := range []string{"-oProxyCommand=bad", "user@router", "router;id"} {
+		called := false
+		client := &ScrapligoNETCONF{newSession: func(string, ...util.Option) (netconfSession, error) {
+			called = true
+			return nil, errors.New("unreachable")
+		}}
+		if err := client.Connect(host, "synthetic", "synthetic", WithHostKeyPolicy("insecure", "")); err == nil || called {
+			t.Fatalf("host %q reached transport", host)
+		}
+	}
+}
+
+func TestNETCONFAutoProfileRetriesLegacyOnlyOnNegotiationFailure(t *testing.T) {
+	for _, tc := range []struct {
+		openErr  error
+		attempts int
+	}{
+		{errors.New("Unable to negotiate with 192.0.2.1: no matching key exchange method found"), 2},
+		{errors.New("permission denied"), 1},
+	} {
+		attempts := 0
+		client := &ScrapligoNETCONF{newSession: func(string, ...util.Option) (netconfSession, error) {
+			attempts++
+			return nil, tc.openErr
+		}}
+		_ = client.Connect("192.0.2.1", "synthetic", "synthetic", WithSecurityProfile("auto"), WithHostKeyPolicy("insecure", ""))
+		if attempts != tc.attempts {
+			t.Fatalf("%v: attempts = %d, want %d", tc.openErr, attempts, tc.attempts)
+		}
 	}
 }
