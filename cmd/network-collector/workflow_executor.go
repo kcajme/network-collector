@@ -1086,44 +1086,12 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 			}
 			*client = nil
 
-			slog.Info("probing SSH port", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName)
-			writeSessionf(ctx.sessionLog, "\n[step:%s] probing SSH port on %s\n", stepName, ctx.ip)
-			if err := waitForSSHPortContext(stepRunContext(ctx), ctx.ip, step.SSHProbe); err != nil {
+			if err := reconnectAfterSSHProbe(ctx, client, stepName, probe); err != nil {
 				*ctx.runFailed = true
 				stopDeviceSteps = true
-				slog.Error("SSH probe failed", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName, "error", err)
-				writeSessionf(ctx.sessionLog, "[step:%s] SSH probe failed: %v\n", stepName, err)
-				recordStepFailure(ctx, stepName, fmt.Sprintf("SSH probe failed: %v", err))
-				break
-			}
-			writeSessionf(ctx.sessionLog, "[step:%s] SSH probe succeeded\n", stepName)
-
-			if probe.PostWait > 0 {
-				slog.Info("waiting after successful SSH probe", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName, "duration", probe.PostWait)
-				writeSessionf(ctx.sessionLog, "[step:%s] waiting %s after successful SSH probe\n", stepName, probe.PostWait)
-				if waitRunContext(ctx.runContext, probe.PostWait) != nil {
-					*ctx.runFailed = true
-					return true
-				}
-			}
-
-			*client = ssh.NewClient(ctx.opts...)
-			username, password := ctx.username, ctx.password
-			if ctx.reauthenticate != nil {
-				username, password, err = ctx.reauthenticate()
-				if err != nil {
-					*ctx.runFailed = true
-					stopDeviceSteps = true
-					recordStepFailure(ctx, stepName, fmt.Sprintf("RSA re-authentication failed: %v", err))
-					break
-				}
-			}
-			if err := (*client).Connect(ctx.ip, username, password, ctx.deviceType); err != nil {
-				*ctx.runFailed = true
-				stopDeviceSteps = true
-				slog.Error("error reconnecting to SSH device after probe", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName, "error", err)
-				writeSessionf(ctx.sessionLog, "[step:%s] failed to reconnect after SSH probe: %v\n", stepName, err)
-				recordStepFailure(ctx, stepName, fmt.Sprintf("failed to reconnect after SSH probe: %v", err))
+				slog.Error("SSH readiness attempts failed", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName, "error", err)
+				writeSessionf(ctx.sessionLog, "[step:%s] SSH readiness failed: %v\n", stepName, err)
+				recordStepFailure(ctx, stepName, fmt.Sprintf("SSH readiness failed: %v", err))
 				break
 			}
 			writeSessionf(ctx.sessionLog, "[step:%s] SSH session re-established\n", stepName)
