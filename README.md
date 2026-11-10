@@ -47,6 +47,10 @@ changes are evaluated under the public
 prioritises tests that observe final transport, filesystem, parser, credential,
 and execution boundaries.
 
+Credential redaction in logs and console output is best-effort; collected
+artifacts are protected by owner-only file permissions (see
+[Security configuration and resume compatibility](#security-configuration-and-resume-compatibility)).
+
 ## Installation
 
 Download a platform archive from the [GitHub releases page](https://github.com/gwoodwa1/network-collector/releases), extract it, and run:
@@ -2125,8 +2129,18 @@ available.
 `session_transcript: true` records channel byte counts, never raw channel bytes.
 Normal command output uses the protected output path and its vendor-secret
 redaction. This prevents echoed credentials split across stream writes from entering
-the transcript. Redaction supports common formats; avoid collecting unnecessary
-secrets even when protected output is enabled.
+the transcript.
+
+Redaction is best-effort. It covers the common Cisco, Juniper and Arista
+credential forms (and JSON/XML secret fields), but vendors keep adding
+syntaxes and some lines are ambiguous, so treat it as a safeguard for logs and
+consoles, not as a guarantee. The control you rely on is file permissions:
+run directories and artifacts are created readable only by the owner (`0600`
+files), so keep them on a host and account you trust, do not loosen their
+permissions when copying or archiving them, and avoid collecting secrets you
+do not need. Redaction also errs towards hiding harmless values: for example
+a key-chain ID line such as `key 1` is shown as `key [REDACTED]` because it
+cannot be told apart from a numeric TACACS/RADIUS key.
 
 Resume requires manifest format 2. Older run directories cannot be resumed.
 Execution identities include structural location and branch/iteration context.

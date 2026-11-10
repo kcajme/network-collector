@@ -4,6 +4,19 @@ All notable changes to Network Collector are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- Fix a 2.0.3 regression where Junos key-chain secrets
+  (`key 0 secret "$9$..."`) were left in output: the bare `key` rule
+  redacted the word `secret` instead of the value.
+- Redact IS-IS `password`/`lsp-password` with `hmac-md5 encrypted`
+  qualifiers, `wpa-psk`, SNMP trap and inform communities on
+  `snmp-server host` lines, and MACsec `cak` keys (including Junos
+  `pre-shared-key cak`). `pre-shared-key key-chain` and `ckn` names are no
+  longer redacted, and redaction never continues onto the next line.
+- Document redaction as best-effort; owner-only file permissions are the
+  control that protects collected artifacts.
+
 ## [2.0.4] - 2026-11-10
 
 Completes the 2.0.3 security hardening. 2.0.3 was published before these

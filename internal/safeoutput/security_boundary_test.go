@@ -74,3 +74,42 @@ func TestBareKeyLeavesHarmlessCommandsReadable(t *testing.T) {
 		t.Errorf("key-string not redacted on its own line: %q", got)
 	}
 }
+
+// Second review round. The key-chain line regressed in 2.0.3/2.0.4: the
+// bare-key rule redacted the word "secret" and hid the value from the
+// secret rule.
+func TestFollowUpCredentialForms(t *testing.T) {
+	for _, input := range []string{
+		`set security authentication-key-chains key-chain kc key 0 secret "$9$SYNTHETIC_CREDENTIAL"`,
+		`key 0 secret "$9$SYNTHETIC_CREDENTIAL"`,
+		"isis password hmac-md5 encrypted SYNTHETIC_CREDENTIAL",
+		"lsp-password hmac-md5 encrypted SYNTHETIC_CREDENTIAL",
+		"wpa-psk ascii 0 SYNTHETIC_CREDENTIAL",
+		`wpa-psk "SYNTHETIC_CREDENTIAL"`,
+		"snmp-server host 192.0.2.5 traps version 2c SYNTHETIC_CREDENTIAL",
+		"snmp-server host 192.0.2.5 vrf MGMT informs version 2c SYNTHETIC_CREDENTIAL udp-port 162",
+		"snmp-server host 192.0.2.5 SYNTHETIC_CREDENTIAL",
+		"cak 0 SYNTHETIC_CREDENTIAL",
+		`set security macsec connectivity-association ca pre-shared-key cak "$9$SYNTHETIC_CREDENTIAL"`,
+		"<cak>$9$SYNTHETIC_CREDENTIAL</cak>",
+	} {
+		if got := Sanitize(input); strings.Contains(got, "SYNTHETIC_CREDENTIAL") {
+			t.Errorf("credential retained: %q", got)
+		}
+	}
+}
+
+func TestSyntaxWordsAfterKeywordsStayReadable(t *testing.T) {
+	for _, input := range []string{
+		"mka pre-shared-key key-chain MKA-KEYS",
+		"set security macsec connectivity-association ca pre-shared-key ckn 0123ABCD",
+	} {
+		if got := Sanitize(input); got != input {
+			t.Errorf("harmless line changed: %q -> %q", input, got)
+		}
+	}
+	// A keyword at the end of a line must not redact the next line.
+	if got := Sanitize("snmp community\ninterface Ethernet1\n"); got != "snmp community\ninterface Ethernet1\n" {
+		t.Errorf("redaction crossed a line boundary: %q", got)
+	}
+}
