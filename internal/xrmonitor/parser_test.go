@@ -59,7 +59,7 @@ RP/0/RSP0/CPU0:pe-router-1#
 // "Interfaces:" section lists the interfaces actually assigned to the VRF.
 // Discovery must parse only that section, not later indented non-interface
 // details in the same command output.
-const sampleVRFDetailInterfacesOutput = `RP/0/RSP1/CPU0:entthw-bpe-1a#show vrf 1115679 ipv4 detail
+const sampleVRFDetailInterfacesOutput = `RP/0/RSP1/CPU0:xr-edge-05#show vrf 1115679 ipv4 detail
 Thu Jul  9 21:52:46.033 BST
 
 VRF 1115679; RD 56460:901115679; VPN ID not set
@@ -80,7 +80,7 @@ Address family IPV4 Unicast
     RT:56460:1115679
   No import route policy
   No export route policy
-RP/0/RSP1/CPU0:entthw-bpe-1a#
+RP/0/RSP1/CPU0:xr-edge-05#
 `
 
 // sampleVRFDetailNoInterfacesOutput mirrors the same command for a VRF with

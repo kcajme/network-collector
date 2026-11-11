@@ -197,7 +197,7 @@ func TestConnectWithRetrySucceedsWithoutPromptingOnFirstAttempt(t *testing.T) {
 		dialCalls++
 		return &genericFakeExecutor{}, nil
 	}
-	reader := bufio.NewReader(strings.NewReader("mretz1\npasscode1\nSENTINEL\n"))
+	reader := bufio.NewReader(strings.NewReader("test-operator\npasscode1\nSENTINEL\n"))
 	cache := monitorsetup.NewCredentialCache(0)
 
 	client, netconfClient, err := connectWithRetry(reader, "host1", "juniper_junos", false, cache, dial, noopDialNetconf(t))
@@ -389,7 +389,7 @@ func TestConnectWithRetryDeclinesHostKeyMismatchWithoutTouchingCredentialCache(t
 	}
 
 	cache := monitorsetup.NewCredentialCache(45 * time.Second)
-	cache.RecordSuccess("mretz1", "goodpass") // pre-existing valid cache entry
+	cache.RecordSuccess("test-operator", "goodpass") // pre-existing valid cache entry
 
 	// Accept the reuse offer ("y") — declining it invalidates the cache on
 	// its own (existing, unrelated behavior), which would make this test
@@ -463,7 +463,7 @@ func TestConnectWithRetryRefreshesHostKeyAndRetriesWithSameCredentials(t *testin
 	}
 
 	cache := monitorsetup.NewCredentialCache(0)
-	reader := bufio.NewReader(strings.NewReader("mretz1\ngoodpass\nREPLACE\ny\n"))
+	reader := bufio.NewReader(strings.NewReader("test-operator\ngoodpass\nREPLACE\ny\n"))
 	client, _, err := connectWithRetry(reader, addr, "juniper_junos", false, cache, dial, noopDialNetconf(t))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -471,7 +471,7 @@ func TestConnectWithRetryRefreshesHostKeyAndRetriesWithSameCredentials(t *testin
 	if client == nil {
 		t.Fatal("expected a non-nil client after the key refresh succeeds")
 	}
-	if len(dialUsers) != 2 || dialUsers[0] != "mretz1/goodpass" || dialUsers[1] != "mretz1/goodpass" {
+	if len(dialUsers) != 2 || dialUsers[0] != "test-operator/goodpass" || dialUsers[1] != "test-operator/goodpass" {
 		t.Fatalf("expected both dial attempts to use the same credentials with no re-prompt, got %v", dialUsers)
 	}
 
@@ -540,16 +540,16 @@ func TestConnectWithRetryDefaultsUsernameFromPreviousAttempt(t *testing.T) {
 		}
 		return &genericFakeExecutor{}, nil
 	}
-	// First attempt: username "mretz1", wrong password. "y" to retry, then
-	// a blank username line (should default to "mretz1") and fresh password.
-	reader := bufio.NewReader(strings.NewReader("mretz1\nwrongpass\ny\n\ncorrectpass\n"))
+	// First attempt: username "test-operator", wrong password. "y" to retry, then
+	// a blank username line (should default to "test-operator") and fresh password.
+	reader := bufio.NewReader(strings.NewReader("test-operator\nwrongpass\ny\n\ncorrectpass\n"))
 	cache := monitorsetup.NewCredentialCache(0)
 
 	if _, _, err := connectWithRetry(reader, "host1", "juniper_junos", false, cache, dial, noopDialNetconf(t)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(dialUsers) != 2 || dialUsers[0] != "mretz1" || dialUsers[1] != "mretz1" {
-		t.Fatalf("expected the retry to default to the previously entered username %q, got %v", "mretz1", dialUsers)
+	if len(dialUsers) != 2 || dialUsers[0] != "test-operator" || dialUsers[1] != "test-operator" {
+		t.Fatalf("expected the retry to default to the previously entered username %q, got %v", "test-operator", dialUsers)
 	}
 }
 

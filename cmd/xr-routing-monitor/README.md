@@ -173,10 +173,10 @@ device is connecting right now:
 
 ```
 --- Device checklist (4 total, 2 connected, 1 failed, 0 skipped, 1 pending) ---
-  [x] entell-bpe-1a  connected
-  [x] entell-bpe-1b  connected
-  [!] entrcn-bpe-1a  failed: errAuthError: password prompt seen multiple times, assuming authentication failed
-  [ ] entsov-bpe-1a  pending
+  [x] xr-edge-01  connected
+  [x] xr-edge-02  connected
+  [!] xr-edge-03  failed: errAuthError: password prompt seen multiple times, assuming authentication failed
+  [ ] xr-edge-04  pending
 ```
 
 A few more top-level, fleet-wide settings are optional:
@@ -366,8 +366,8 @@ connection failure or offers it through the routine `Retry credentials?`
 prompt — it always shows its own explicit warning first:
 
 ```
-*** SSH HOST KEY MISMATCH for entell-bpe-1a ***
-The key saved in /home/you/.ssh/known_hosts no longer matches what entell-bpe-1a just presented.
+*** SSH HOST KEY MISMATCH for xr-edge-01 ***
+The key saved in /home/you/.ssh/known_hosts no longer matches what xr-edge-01 just presented.
 This can mean the device was reimaged or replaced — or it can mean someone is intercepting this connection. Verify the device's real key out-of-band (console, vendor docs, change record) before continuing.
   saved key:     SHA256:...
 Type REPLACE to fetch the key it's presenting right now and compare, or press Enter to abort:

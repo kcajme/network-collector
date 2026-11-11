@@ -1,4 +1,4 @@
-RP/0/RP0/CPU0:wnlb-b2baggpe-2b#show alarms brief system active
+RP/0/RP0/CPU0:xr-router-01#show alarms brief system active
 Fri Jun  5 09:45:00.100 BST
 
 Active Alarms

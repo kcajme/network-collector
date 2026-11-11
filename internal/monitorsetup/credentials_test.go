@@ -133,22 +133,22 @@ func TestResolveCredentialsKeepsUsernameAfterASuccessfulConnection(t *testing.T)
 func TestResolveCredentialsDoesNotStickAUsernameThatNeverConnected(t *testing.T) {
 	cache := NewCredentialCache(0)
 
-	reader := bufio.NewReader(strings.NewReader("91896774\n\n"))
+	reader := bufio.NewReader(strings.NewReader("12345678\n\n"))
 	username, _, fresh, err := ResolveCredentials(reader, cache, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !fresh || username != "91896774" {
+	if !fresh || username != "12345678" {
 		t.Fatalf("unexpected first prompt result: fresh=%v username=%q", fresh, username)
 	}
 	cache.RecordFailure() // the device connection failed with that bad username
 
-	reader2 := bufio.NewReader(strings.NewReader("mretz1\ngoodpasscode\n"))
+	reader2 := bufio.NewReader(strings.NewReader("test-operator\ngoodpasscode\n"))
 	username2, _, _, err := ResolveCredentials(reader2, cache, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if username2 != "mretz1" {
+	if username2 != "test-operator" {
 		t.Fatalf("expected a fresh username prompt with no poisoned default, got %q", username2)
 	}
 }

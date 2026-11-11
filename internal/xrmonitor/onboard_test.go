@@ -414,7 +414,7 @@ func TestConnectWithRetrySucceedsWithoutPromptingOnFirstAttempt(t *testing.T) {
 		dialCalls++
 		return fakeSessionExecutor{}, nil
 	}
-	reader := bufio.NewReader(strings.NewReader("mretz1\npasscode1\nSENTINEL\n"))
+	reader := bufio.NewReader(strings.NewReader("test-operator\npasscode1\nSENTINEL\n"))
 	cache := monitorsetup.NewCredentialCache(0)
 
 	client, err := connectWithRetry(reader, "host1", "cisco_iosxr", cache, dial)
@@ -571,44 +571,37 @@ func TestConnectWithRetryDefaultsToNoOnBlankAnswer(t *testing.T) {
 	}
 }
 
-// TestOnboardingRecoversFromFatFingeredUsernameAcrossDevices is a regression
-// test for a real incident: mid-run, an operator fat-fingered a fresh RSA
-// passcode into the username prompt for one device (entrcn-bpe-1a in the
-// real transcript), declined the retry, and the very next device then
-// offered that garbage value ("91896774") as its username default — one
-// mistake cascading forward instead of staying confined to the device it
-// happened on. This walks through the exact three-device shape of that
-// incident (good device, fat-fingered device, next device) using the real
-// connectWithRetry + CredentialCache, the same objects
-// OnboardDevicesFromSpecs shares across every device in a --devices run.
+// TestOnboardingRecoversFromFatFingeredUsernameAcrossDevices uses synthetic
+// devices and credentials to check that a passcode entered as a username on
+// one device cannot poison the cached username offered for the next device.
 func TestOnboardingRecoversFromFatFingeredUsernameAcrossDevices(t *testing.T) {
 	cache := monitorsetup.NewCredentialCache(0) // isolate from the separate passcode-reuse-window feature
 
 	// Device 1: entered correctly, connects successfully.
 	dial1 := func(host, username, password, deviceType string) (sessionExecutor, error) {
-		if username != "mretz1" || password != "goodpasscode1" {
+		if username != "test-operator" || password != "goodpasscode1" {
 			t.Fatalf("device 1: unexpected credentials %q/%q", username, password)
 		}
 		return fakeSessionExecutor{}, nil
 	}
-	reader1 := bufio.NewReader(strings.NewReader("mretz1\ngoodpasscode1\n"))
-	if _, err := connectWithRetry(reader1, "entell-bpe-1a", "cisco_iosxr", cache, dial1); err != nil {
+	reader1 := bufio.NewReader(strings.NewReader("test-operator\ngoodpasscode1\n"))
+	if _, err := connectWithRetry(reader1, "xr-edge-01", "cisco_iosxr", cache, dial1); err != nil {
 		t.Fatalf("device 1: unexpected error: %v", err)
 	}
 
 	// Device 2: the operator fat-fingers a fresh RSA passcode into the
-	// username prompt (instead of pressing Enter to keep "mretz1"), the
+	// username prompt (instead of pressing Enter to keep "test-operator"), the
 	// connection fails, and they decline the retry ("n").
 	dial2 := func(host, username, password, deviceType string) (sessionExecutor, error) {
 		return nil, fmt.Errorf("errAuthError: password prompt seen multiple times, assuming authentication failed")
 	}
-	reader2 := bufio.NewReader(strings.NewReader("91896774\n\nn\n"))
-	if _, err := connectWithRetry(reader2, "entrcn-bpe-1a", "cisco_iosxr", cache, dial2); err == nil {
+	reader2 := bufio.NewReader(strings.NewReader("12345678\n\nn\n"))
+	if _, err := connectWithRetry(reader2, "xr-edge-03", "cisco_iosxr", cache, dial2); err == nil {
 		t.Fatal("device 2: expected an error (operator declined the retry)")
 	}
 
-	// Device 3: must default to "mretz1" (the last username that actually
-	// authenticated), never "91896774" (the fat-fingered value from device
+	// Device 3: must default to "test-operator" (the last username that actually
+	// authenticated), never "12345678" (the fat-fingered value from device
 	// 2, which never connected).
 	var device3User string
 	dial3 := func(host, username, password, deviceType string) (sessionExecutor, error) {
@@ -617,11 +610,11 @@ func TestOnboardingRecoversFromFatFingeredUsernameAcrossDevices(t *testing.T) {
 	}
 	// Blank line accepts the offered default.
 	reader3 := bufio.NewReader(strings.NewReader("\ngoodpasscode3\n"))
-	if _, err := connectWithRetry(reader3, "entsov-bpe-1a", "cisco_iosxr", cache, dial3); err != nil {
+	if _, err := connectWithRetry(reader3, "xr-edge-04", "cisco_iosxr", cache, dial3); err != nil {
 		t.Fatalf("device 3: unexpected error: %v", err)
 	}
-	if device3User != "mretz1" {
-		t.Fatalf("device 3: expected the default username to stay %q, got poisoned value %q", "mretz1", device3User)
+	if device3User != "test-operator" {
+		t.Fatalf("device 3: expected the default username to stay %q, got poisoned value %q", "test-operator", device3User)
 	}
 }
 
@@ -701,7 +694,7 @@ func TestConnectWithRetryDeclinesHostKeyMismatchWithoutTouchingCredentialCache(t
 	}
 
 	cache := monitorsetup.NewCredentialCache(45 * time.Second)
-	cache.RecordSuccess("mretz1", "goodpass") // pre-existing valid cache entry
+	cache.RecordSuccess("test-operator", "goodpass") // pre-existing valid cache entry
 
 	// Accept the reuse offer ("y") — declining it invalidates the cache on
 	// its own (existing, unrelated behavior), which would make this test
@@ -768,7 +761,7 @@ func TestConnectWithRetryRefreshesHostKeyAndRetriesWithSameCredentials(t *testin
 	}
 
 	cache := monitorsetup.NewCredentialCache(0)
-	reader := bufio.NewReader(strings.NewReader("mretz1\ngoodpass\nREPLACE\ny\n"))
+	reader := bufio.NewReader(strings.NewReader("test-operator\ngoodpass\nREPLACE\ny\n"))
 	client, err := connectWithRetry(reader, addr, "cisco_iosxr", cache, dial)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -776,7 +769,7 @@ func TestConnectWithRetryRefreshesHostKeyAndRetriesWithSameCredentials(t *testin
 	if client == nil {
 		t.Fatal("expected a non-nil client after the key refresh succeeds")
 	}
-	if len(dialUsers) != 2 || dialUsers[0] != "mretz1/goodpass" || dialUsers[1] != "mretz1/goodpass" {
+	if len(dialUsers) != 2 || dialUsers[0] != "test-operator/goodpass" || dialUsers[1] != "test-operator/goodpass" {
 		t.Fatalf("expected both dial attempts to use the same credentials with no re-prompt, got %v", dialUsers)
 	}
 
@@ -803,15 +796,15 @@ func TestConnectWithRetryDefaultsUsernameFromPreviousAttempt(t *testing.T) {
 		}
 		return fakeSessionExecutor{}, nil
 	}
-	// First attempt: username "mretz1", wrong password. "y" to retry, then
-	// a blank username line (should default to "mretz1") and fresh password.
-	reader := bufio.NewReader(strings.NewReader("mretz1\nwrongpass\ny\n\ncorrectpass\n"))
+	// First attempt: username "test-operator", wrong password. "y" to retry, then
+	// a blank username line (should default to "test-operator") and fresh password.
+	reader := bufio.NewReader(strings.NewReader("test-operator\nwrongpass\ny\n\ncorrectpass\n"))
 	cache := monitorsetup.NewCredentialCache(0)
 
 	if _, err := connectWithRetry(reader, "host1", "cisco_iosxr", cache, dial); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(dialUsers) != 2 || dialUsers[0] != "mretz1" || dialUsers[1] != "mretz1" {
-		t.Fatalf("expected the retry to default to the previously entered username %q, got %v", "mretz1", dialUsers)
+	if len(dialUsers) != 2 || dialUsers[0] != "test-operator" || dialUsers[1] != "test-operator" {
+		t.Fatalf("expected the retry to default to the previously entered username %q, got %v", "test-operator", dialUsers)
 	}
 }
