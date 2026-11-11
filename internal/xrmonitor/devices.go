@@ -230,7 +230,7 @@ func LoadDeviceSpecs(path string) (specs []DeviceSpec, interval time.Duration, g
 		return nil, 0, "", CommandOverrides{}, nil, nil, err
 	}
 	var doc DevicesDocument
-	if err := safeyaml.Unmarshal(b, &doc); err != nil {
+	if err := safeyaml.UnmarshalStrict(b, &doc); err != nil {
 		return nil, 0, "", CommandOverrides{}, nil, nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	interval, err = ValidateDevicesDocument(path, doc)

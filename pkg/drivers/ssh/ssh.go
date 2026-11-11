@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"github.com/gwoodwa1/network-collector/pkg/drivers/hostkey"
+	"github.com/gwoodwa1/network-collector/pkg/drivers/sshprofile"
 	"github.com/scrapli/scrapligo/driver/network"
 	"github.com/scrapli/scrapligo/driver/options"
 	"github.com/scrapli/scrapligo/platform"
+	"github.com/scrapli/scrapligo/transport"
 	"github.com/scrapli/scrapligo/util"
 )
 
@@ -58,6 +60,14 @@ func (s *scrapligoSSHSession) Close() error {
 	return s.driver.Close()
 }
 
+// Shared with the NETCONF driver so both protocols enforce one policy.
+var (
+	normalizeSecurityProfile    = sshprofile.Normalize
+	isAlgorithmNegotiationError = sshprofile.IsNegotiationError
+	validateHost                = sshprofile.ValidateHost
+	algorithmArgs               = sshprofile.Args
+)
+
 // Option is a type-safe option for configuring Client
 type Option func(*Client)
 
@@ -95,18 +105,6 @@ func WithHostKeyPolicy(policy, knownHostsFile string) Option {
 	}
 }
 
-func normalizeSecurityProfile(profile string) (string, error) {
-	profile = strings.ToLower(strings.TrimSpace(profile))
-	if profile == "" {
-		return "modern", nil
-	}
-	switch profile {
-	case "compatibility", "auto", "modern", "legacy":
-		return profile, nil
-	}
-	return "", fmt.Errorf("unsupported SSH security profile %q", profile)
-}
-
 func normalizeHostKeyPolicy(policy string) (string, error) {
 	policy = strings.ToLower(strings.TrimSpace(policy))
 	if policy == "" {
@@ -117,20 +115,6 @@ func normalizeHostKeyPolicy(policy string) (string, error) {
 		return policy, nil
 	}
 	return "", fmt.Errorf("unsupported SSH host key policy %q", policy)
-}
-
-func isAlgorithmNegotiationError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	markers := []string{"no common algorithm", "no common algo", "no matching key exchange", "no matching cipher", "unable to negotiate", "no common key exchange", "no common cipher"}
-	for _, marker := range markers {
-		if strings.Contains(message, marker) {
-			return true
-		}
-	}
-	return false
 }
 
 func (c *Client) SelectedSecurityProfile() string {
@@ -227,7 +211,13 @@ func (c *Client) Connect(host, username, password, driverName string) error {
 		return err
 	}
 
-	trimmedDriverName := strings.TrimSpace(driverName)
+	trimmedDriverName, err := bundledPlatform(driverName)
+	if err != nil {
+		return err
+	}
+	if err := validateHost(host); err != nil {
+		return err
+	}
 	trimmedHost := strings.TrimSpace(host)
 	profile, err := normalizeSecurityProfile(c.securityProfile)
 	if err != nil {
@@ -406,12 +396,7 @@ func (c *Client) connectWithProfile(host, username, password, driverName, profil
 	if err != nil {
 		return err
 	}
-	if profile == "compatibility" || profile == "legacy" {
-		platformOptions = append(platformOptions,
-			options.WithStandardTransportExtraKexs([]string{"diffie-hellman-group14-sha1", "diffie-hellman-group-exchange-sha1", "diffie-hellman-group1-sha1"}),
-			options.WithStandardTransportExtraCiphers([]string{"aes128-ctr", "aes192-ctr", "aes256-ctr", "aes128-cbc", "aes192-cbc", "aes256-cbc", "3des-cbc"}),
-		)
-	}
+	platformOptions = append(platformOptions, options.WithTransportType(transport.SystemTransport), options.WithSystemTransportOpenArgs(algorithmArgs(profile)))
 
 	platformConfig, err := platform.NewPlatform(
 		driverName,
@@ -523,4 +508,18 @@ func closeSSHSession(session sshSession) (err error) {
 		}
 	}()
 	return session.Close()
+}
+
+// Platform names never resolve implicitly to files or URLs.
+func bundledPlatform(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "cisco_ios" {
+		name = platform.CiscoIosxe
+	}
+	for _, allowed := range platform.GetPlatformNames() {
+		if name == allowed {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("unsupported SSH platform %q: use a bundled platform name", name)
 }

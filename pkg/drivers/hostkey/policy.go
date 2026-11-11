@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/scrapli/scrapligo/driver/options"
+	"github.com/scrapli/scrapligo/transport"
 	"github.com/scrapli/scrapligo/util"
 )
 
@@ -53,6 +54,22 @@ func (value policy) Apply(existing []util.Option) ([]util.Option, error) {
 	case "insecure":
 		return append(result, options.WithAuthNoStrictKey()), nil
 	case "known_hosts", "pinned":
+		result = append(result, func(o interface{}) error {
+			args, ok := o.(*transport.SSHArgs)
+			if !ok {
+				return util.ErrIgnoredOption
+			}
+			args.StrictKey = true
+			return nil
+		})
+		if value.name == "pinned" {
+			// Only the pinned file may vouch for the host. scrapligo already
+			// passes -F /dev/null, so no config can add a KnownHostsCommand;
+			// passing KnownHostsCommand=none here would also make OpenSSH
+			// older than 8.5 (RHEL 8, Ubuntu 20.04) reject the command line.
+			result = append(result, options.WithSystemTransportOpenArgs([]string{"-o", "GlobalKnownHostsFile=/dev/null"}))
+		}
+
 		if value.knownHostsFile != "" {
 			return append(result, options.WithSSHKnownHostsFile(value.knownHostsFile)), nil
 		}

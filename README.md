@@ -191,6 +191,10 @@ changes are evaluated under the public
 prioritises tests that observe final transport, filesystem, parser, credential,
 and execution boundaries.
 
+Credential redaction in logs and console output is best-effort; collected
+artifacts are protected by owner-only file permissions (see
+[Security configuration and resume compatibility](#security-configuration-and-resume-compatibility)).
+
 ## Installation
 
 Download a platform archive from the [GitHub releases page](https://github.com/gwoodwa1/network-collector/releases), extract it, and run:
@@ -300,6 +304,8 @@ profiles:
   edge: {username: junos-automation, password: replace-me}
 ```
 
+Unknown keys are rejected, so a typo such as `pasword:` or `profile:` fails
+loading instead of silently yielding an empty password or an unused profile.
 Assign a profile to an inventory host with `credential_profile: datacenter`.
 First-class provider configurations are included for
 [HashiCorp Vault](examples/credential-providers/vault.yaml),
@@ -1066,17 +1072,39 @@ ssh_security:
   known_hosts_file: ~/.ssh/known_hosts # optional
 ```
 
+The profile and host-key policy apply to every session that runs the system
+OpenSSH client: CLI `ssh` targets, NETCONF targets and steps, and the NETCONF
+half of `facts` collection. A device's `ssh_security` therefore governs its
+NETCONF `edit-config` and `commit` sessions as well as its CLI commands.
+
 Available profiles:
 
-- `compatibility`: preserves the previous cipher and key-exchange behavior.
-- `auto`: tries the SSH library's standard algorithm set first, then retries with legacy compatibility algorithms only after a recognizable algorithm-negotiation failure.
-- `modern`: uses only the SSH library's standard algorithm set and never falls back.
-- `legacy`: explicitly enables the compatibility algorithm set and appears in the startup warning summary.
+- `compatibility`: enables the same explicit legacy cipher, MAC and key-exchange set as `legacy`.
+- `auto`: tries the explicit modern OpenSSH algorithm set first, then retries with the legacy set only after a recognizable algorithm-negotiation failure (including "no matching host key type").
+- `modern`: constrains OpenSSH to the collector's explicit modern KEX, cipher and MAC allowlists and never falls back. When the local OpenSSH supports them, the post-quantum hybrid key exchanges (`mlkem768x25519-sha256`, `sntrup761x25519-sha512`) are offered first.
+- `legacy`: explicitly adds legacy algorithms to the modern set and appears in the startup warning summary. It also re-enables SHA-1 `ssh-rsa` host keys, which OpenSSH 8.8 and later no longer accept by default but many older devices still present.
 
 Auto fallback never occurs for authentication failures, host-key failures, timeouts, DNS errors, or refused connections.
 
+The baseline algorithm lists use only names that OpenSSH 7.4 and later
+recognise, so they work on older clients such as RHEL 8 (OpenSSH 8.0) and
+Ubuntu 20.04 (8.2). Newer names (the post-quantum hybrids and `ssh-rsa`) are
+added only after the collector runs `ssh -Q kex` / `ssh -Q key` against the
+same `ssh` binary on `PATH`; OpenSSH refuses to start when given an algorithm
+name it does not know, so an unsupported name is omitted rather than breaking
+the connection. The result is cached per `ssh` binary for the life of the
+process. This probe is the only process the collector starts outside
+administrator-configured credential helpers.
+
 If `known_hosts_file` is omitted, ScrapliGo checks its supported user and
-system defaults. `pinned` requires an explicit known-hosts file.
+system defaults. `pinned` requires an explicit known-hosts file and disables
+global known-hosts files. OpenSSH is always started with `-F /dev/null`, so
+no `ssh_config` (including a `KnownHostsCommand`) can add another source of
+trusted host keys under any policy.
+
+SSH device `type` must be a bundled ScrapliGo platform name. `cisco_ios` is
+accepted as an alias for `cisco_iosxe`. Custom platform paths and URLs are not
+supported. Profiles retain system OpenSSH and interactive passcode support.
 
 For a temporary lab or approved legacy migration, the entire workbook must
 explicitly opt out of production enforcement. Keep host verification enabled
@@ -1096,6 +1124,11 @@ ssh:
 Permissive mode emits a startup warning. Legacy fallback and host identity are
 independent; disabling host verification is never required merely because a
 device needs old key exchange or cipher algorithms.
+
+Upgrading from 2.0.3 or earlier: NETCONF sessions previously negotiated with
+OpenSSH's own defaults and ignored `ssh_security.profile`. A NETCONF device
+that only connected because of those defaults now fails under `modern`; give
+it `profile: legacy` (or `auto`) in permissive mode, as above.
 
 ### Custom SSH platform definitions
 
@@ -2322,3 +2355,55 @@ Example equality checks added in `config.yaml`:
 - Boolean equality: `condition: eq`, `expected: true`, `expected_type: bool`
 - Regex match against an extracted value: `condition: matches`, `expected: '^\d+\.\d+\.\d+$'`
 - Length check: `condition: gte`, `expected: 3`, `expected_type: length`
+
+
+### Security configuration and resume compatibility
+
+Workbook, inventory and parser schema keys are checked strictly, including nested
+steps. Arbitrary keys remain supported inside variable and other documented data
+maps. Only `FAIL_ON_FAIL` overrides a workbook setting through environment binding;
+`SECURITY_MODE`, `INVENTORY_FILE` and `PARSERS_FILE` do not replace explicit settings.
+Administrator environment controls for credentials and destination policies remain
+available.
+
+`output.session_transcript` defaults to `true` and records complete command
+responses through the protected output path and its vendor-secret redaction.
+Raw authentication/channel logging is disabled, so credentials echoed in stream
+writes do not enter the transcript. Set it to `false` for output metadata only.
+
+Redaction is best-effort. It covers the common Cisco, Juniper and Arista
+credential forms (and JSON/XML secret fields), but vendors keep adding
+syntaxes and some lines are ambiguous, so treat it as a safeguard for logs and
+consoles, not as a guarantee. The control you rely on is file permissions:
+run directories and artifacts are created readable only by the owner (`0600`
+files), so keep them on a host and account you trust, do not loosen their
+permissions when copying or archiving them, and avoid collecting secrets you
+do not need. Redaction also errs towards hiding harmless values: for example
+a key-chain ID line such as `key 1` is shown as `key [REDACTED]` because it
+cannot be told apart from a numeric TACACS/RADIUS key.
+
+Resume requires manifest format 2. Older run directories cannot be resumed.
+Execution identities include structural location and branch/iteration context.
+Changed runtime variable bindings stop resume rather than replaying or skipping a
+different mutation. Completed mutations that register output, validate it, perform
+drift checks or have follow-up actions stop resume for manual reconciliation,
+because their output and downstream completion cannot be reconstructed safely. Manifests bind resolved execution inputs and imported,
+variable, parser and static NETCONF payload files. A workflow using runtime-selected
+payload-file paths can run normally but cannot resume; use static paths or inline
+payloads for resumable workflows. Changes to inputs require a new run and review of
+any previously uncertain mutations.
+
+Syslog sinks require an administrator allowlist of exact `host:port` endpoints in
+`NETWORK_COLLECTOR_SYSLOG_ALLOWED_ADDRESSES` (comma or whitespace separated).
+Internal collector addresses may be explicitly allowed. The default transport is
+TLS with certificate verification; production mode rejects UDP and plaintext TCP.
+Those transports require explicit permissive mode as well as the allowlist.
+The RESTCONF, Arista HTTP and gNMI helper CLIs also default to production mode and
+require `security_mode: permissive` before accepting insecure TLS/plaintext options.
+
+Release builds and scans run with read-only repository permissions. A separate
+publisher consumes the verified archives without checking out or executing build
+code. Repository administrators must configure the GitHub `release` environment
+with required reviewers and permitted release tags; naming the environment in YAML
+alone does not establish those protections. Publishing fails closed if the
+reviewer-rule check is missing, fails, or finds no required reviewers.

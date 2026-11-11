@@ -2,6 +2,7 @@
 package safeyaml
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -79,4 +80,22 @@ func inspectDocument(root *yaml.Node, maxNodes int) (int, error) {
 		pending = append(pending, node.Content...)
 	}
 	return nodes, nil
+}
+
+// UnmarshalStrict preserves resource bounds and rejects unknown schema fields.
+func UnmarshalStrict(content []byte, target interface{}) error {
+	var document yaml.Node
+	if _, err := UnmarshalWithNodeCount(content, &document); err != nil {
+		return err
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(content))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var extra interface{}
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return fmt.Errorf("expected exactly one YAML document")
+	}
+	return nil
 }

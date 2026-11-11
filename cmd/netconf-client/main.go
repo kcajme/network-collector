@@ -27,7 +27,6 @@ type NetconfConfigSet struct {
 func init() {
 	viper.SetConfigName("config")
 	viper.AddConfigPath("./")
-	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
 		slog.Warn("unable to read config file", "error", err)

@@ -57,7 +57,7 @@ func loadMixedFleetDocument(path string) (*mixedFleetDocument, mixedFleetInterva
 		return nil, mixedFleetIntervals{}, err
 	}
 	var doc mixedFleetDocument
-	if err := safeyaml.Unmarshal(b, &doc); err != nil {
+	if err := safeyaml.UnmarshalStrict(b, &doc); err != nil {
 		return nil, mixedFleetIntervals{}, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if doc.CiscoIOSXR == nil && doc.JuniperJunos == nil {

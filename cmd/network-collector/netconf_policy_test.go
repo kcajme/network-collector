@@ -39,6 +39,7 @@ func TestNETCONFPolicy_ParallelMatchesSequential(t *testing.T) {
 	device := DeviceConfig{
 		OperationTimeout: 47,
 		SSHSecurity: &SSHSecurityConfig{
+			Profile:        "legacy",
 			HostKeyPolicy:  "known_hosts",
 			KnownHostsFile: "/etc/network-collector/device-known-hosts",
 		},
@@ -48,9 +49,10 @@ func TestNETCONFPolicy_ParallelMatchesSequential(t *testing.T) {
 		KnownHostsFile: "/etc/network-collector/global-known-hosts",
 	}, device)
 	want := netconfConnectionPolicy{
-		timeout:        47 * time.Second,
-		hostKeyPolicy:  "known_hosts",
-		knownHostsFile: "/etc/network-collector/device-known-hosts",
+		timeout:         47 * time.Second,
+		securityProfile: "legacy",
+		hostKeyPolicy:   "known_hosts",
+		knownHostsFile:  "/etc/network-collector/device-known-hosts",
 	}
 
 	sequential := newLazyNETCONFExecutor("192.0.2.10", "collector", "secret", policy)

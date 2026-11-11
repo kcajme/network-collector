@@ -73,3 +73,34 @@ func TestFileProviderRejectsYAMLAnchorsBeforeCredentialDecode(t *testing.T) {
 		t.Fatalf("credential YAML anchors were not rejected: %v", err)
 	}
 }
+
+// A misspelled key ("pasword", "profile") must fail loudly rather than
+// silently producing an empty credential or an unused default.
+func TestFileProviderRejectsUnknownFields(t *testing.T) {
+	for _, content := range []string{
+		"default:\n  username: u\n  pasword: p\n",
+		"default:\n  username: u\n  password: p\nprofile:\n  edge:\n    username: e\n    password: e\n",
+	} {
+		path := filepath.Join(t.TempDir(), "credentials.yaml")
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := NewFileProvider(path); err == nil {
+			t.Fatalf("unknown field accepted: %q", content)
+		}
+	}
+}
+
+func TestFileProviderAcceptsShippedExample(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "examples", "credentials.example.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "credentials.yaml")
+	if err := os.WriteFile(path, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewFileProvider(path); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -121,7 +121,6 @@ func sshOptionsForDevice(device DeviceConfig, globalSecurity SSHSecurityConfig) 
 }
 
 func init() {
-	viper.AutomaticEnv()
 	if err := viper.BindEnv("fail_on_fail", "FAIL_ON_FAIL"); err != nil {
 		slog.Error("error binding environment variable", "key", "fail_on_fail", "env", "FAIL_ON_FAIL", "error", err)
 		os.Exit(1)
@@ -136,6 +135,7 @@ const (
 )
 
 type configImportBudget struct {
+	digests  map[string]string
 	files    int
 	bytes    int
 	nodes    int
@@ -153,6 +153,10 @@ func (budget *configImportBudget) consumeFile(path string, content []byte) error
 	if byteLimit == 0 {
 		byteLimit = maxConfigImportBytes
 	}
+	if budget.digests == nil {
+		budget.digests = map[string]string{}
+	}
+	budget.digests[path] = bytesDigest(content)
 	budget.files++
 	budget.bytes += len(content)
 	switch {
@@ -446,13 +450,13 @@ func loadConfigMap(path string, depth int, loaded, active map[string]bool, budge
 }
 
 func loadConfig(configFile string) (Config, bool, error) {
-	configMap, err := loadConfigMap(configFile, 0, map[string]bool{}, map[string]bool{}, &configImportBudget{})
+	budget := &configImportBudget{}
+	configMap, err := loadConfigMap(configFile, 0, map[string]bool{}, map[string]bool{}, budget)
 	if err != nil {
 		return Config{}, false, err
 	}
 	settings := viper.New()
 	settings.SetDefault("output.session_transcript", true)
-	settings.AutomaticEnv()
 	if err := settings.BindEnv("fail_on_fail", "FAIL_ON_FAIL"); err != nil {
 		return Config{}, false, err
 	}
@@ -460,7 +464,7 @@ func loadConfig(configFile string) (Config, bool, error) {
 		return Config{}, false, err
 	}
 	var config Config
-	if err := settings.Unmarshal(&config, viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
+	if err := settings.UnmarshalExact(&config, viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
 		stringToBoolDecodeHook,
 	))); err != nil {
 		return Config{}, false, err
@@ -476,6 +480,7 @@ func loadConfig(configFile string) (Config, bool, error) {
 		return Config{}, false, fmt.Errorf("resolve config path: %w", err)
 	}
 	config.baseDir = filepath.Dir(absolutePath)
+	config.inputDigests = budget.digests
 	return config, settings.GetBool("fail_on_fail"), nil
 }
 

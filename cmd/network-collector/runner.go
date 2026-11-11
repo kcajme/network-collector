@@ -20,9 +20,10 @@ func effectiveNETCONFPolicy(global SSHSecurityConfig, device DeviceConfig) netco
 	}
 	security := effectiveSSHSecurity(global, device.SSHSecurity)
 	return netconfConnectionPolicy{
-		timeout:        timeout,
-		hostKeyPolicy:  security.HostKeyPolicy,
-		knownHostsFile: security.KnownHostsFile,
+		timeout:         timeout,
+		securityProfile: security.Profile,
+		hostKeyPolicy:   security.HostKeyPolicy,
+		knownHostsFile:  security.KnownHostsFile,
 	}
 }
 
@@ -30,7 +31,7 @@ func runSSHDevice(index, occurrence int, device DeviceConfig, config Config, use
 	return runSSHDeviceContext(context.Background(), index, occurrence, device, config, username, password, rsaAuth, jsonOut, pretty, approveAll, approvals, approvalWriter, parsers, variables, runDir, events, nil, nil)
 }
 
-func runSSHDeviceContext(runContext context.Context, index, occurrence int, device DeviceConfig, config Config, username, password string, rsaAuth *rsaTokenAuth, jsonOut, pretty, approveAll bool, approvals *approvalInput, approvalWriter io.Writer, parsers map[string]ParserModuleConfig, variables map[string]string, runDir string, events *eventDispatcher, journal *runJournal, resumeCompleted map[string]bool) (result deviceRunResult) {
+func runSSHDeviceContext(runContext context.Context, index, occurrence int, device DeviceConfig, config Config, username, password string, rsaAuth *rsaTokenAuth, jsonOut, pretty, approveAll bool, approvals *approvalInput, approvalWriter io.Writer, parsers map[string]ParserModuleConfig, variables map[string]string, runDir string, events *eventDispatcher, journal *runJournal, resumeCompleted map[string]string) (result deviceRunResult) {
 	startedAt := time.Now()
 	checkpoint := config.checkpoints[variableScopeKey(device.Hostname, device.IP)]
 	if checkpoint != nil {
@@ -152,6 +153,7 @@ func runSSHDeviceContext(runContext context.Context, index, occurrence int, devi
 		gnmiActionBudget: &gnmiDeviceActionBudget{},
 		journal:          journal,
 		occurrence:       occurrence,
+		executionPath:    fmt.Sprintf("device:%d", index),
 		resumeCompleted:  resumeCompleted,
 	}
 	if checkpoint != nil {

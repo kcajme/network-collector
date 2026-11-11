@@ -78,10 +78,11 @@ func waitForSessionActions(run context.Context, display *progressDisplay, device
 // These checkpoints intentionally live only in memory. Restoring one never
 // re-executes successful steps to reconstruct variables from device output.
 type hostCheckpoint struct {
-	remaining []StepConfig
-	before    map[string]string
-	attempt   int
-	blocked   string
+	startIndex int
+	remaining  []StepConfig
+	before     map[string]string
+	attempt    int
+	blocked    string
 }
 
 func retryBoundary(step StepConfig) string {
@@ -93,10 +94,15 @@ func retryBoundary(step StepConfig) string {
 
 func executeCheckpointedSteps(ctx *stepExecutionContext, client **ssh.Client, steps []StepConfig) bool {
 	checkpoint := ctx.checkpoint
+	baseIndex := checkpoint.startIndex
+	previousOffset := ctx.stepIndexOffset
+	defer func() { ctx.stepIndexOffset = previousOffset }()
 	ctx.checkpoint = nil
 	defer func() { ctx.checkpoint = checkpoint }()
 	for index, step := range steps {
 		checkpoint.remaining = steps[index:]
+		checkpoint.startIndex = baseIndex + index
+		ctx.stepIndexOffset = checkpoint.startIndex
 		checkpoint.before = cloneVariables(ctx.variables)
 		checkpoint.blocked = retryBoundary(step)
 		count := len(*ctx.aggregated)

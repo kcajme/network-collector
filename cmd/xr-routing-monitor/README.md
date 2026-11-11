@@ -132,7 +132,9 @@ cleanly and exits once every polling loop has stopped.
 ### Providing devices via a YAML file (optional)
 
 Instead of typing hostname/VRF/interfaces/neighbors interactively for every
-device, list them once in a file and pass `--devices path/to/file.yaml`:
+device, list them once in a file and pass `--devices path/to/file.yaml`.
+Unknown keys are rejected when the file loads, so a misspelled field fails
+startup with the offending line number instead of being silently ignored. Example:
 
 ```yaml
 interval: 30s

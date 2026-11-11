@@ -4,6 +4,91 @@ All notable changes to Network Collector are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- Fix a 2.0.3 regression where Junos key-chain secrets
+  (`key 0 secret "$9$..."`) were left in output: the bare `key` rule
+  redacted the word `secret` instead of the value.
+- Redact IS-IS `password`/`lsp-password` with `hmac-md5 encrypted`
+  qualifiers, `wpa-psk`, SNMP trap and inform communities on
+  `snmp-server host` lines, and MACsec `cak` keys (including Junos
+  `pre-shared-key cak`). `pre-shared-key key-chain` and `ckn` names are no
+  longer redacted, and redaction never continues onto the next line.
+- Document redaction as best-effort; owner-only file permissions are the
+  control that protects collected artifacts.
+
+## [2.0.4] - 2026-11-10
+
+Completes the 2.0.3 security hardening. 2.0.3 was published before these
+fixes landed; upgrade directly to 2.0.4.
+
+### Security
+
+- Apply the SSH security profile and host validation to NETCONF sessions,
+  which previously negotiated with OpenSSH defaults. This covers NETCONF
+  `edit-config` and `commit` sessions and the `auto` modern-to-legacy
+  fallback.
+- Remove `KnownHostsCommand=none` from the `pinned` host-key policy. OpenSSH
+  older than 8.5 (RHEL 8, Ubuntu 20.04) rejected it; `-F /dev/null` already
+  prevents any configured known-hosts command.
+- Prefer the post-quantum hybrid key exchanges in the `modern` profile when
+  the local OpenSSH supports them, and re-enable `ssh-rsa` host keys in the
+  `legacy` profile for older devices on OpenSSH 8.8+. Newer algorithm names
+  are offered only after `ssh -Q` confirms support.
+- Close remaining redaction gaps: Junos `ascii-text`/`$9$` pre-shared keys,
+  `privacy-key` and XML secret elements, `password encrypted`, IOS XR type 10
+  and Arista `sha512` secrets, and OSPF `message-digest-key`. Harmless
+  `key chain` and `crypto key` commands are no longer redacted.
+- Reject unknown keys in routing-monitor device files and the credentials
+  file. Stop `netconf-client` binding arbitrary environment variables.
+
+### Compatibility and upgrade notes
+
+- NETCONF sessions now honour `ssh_security.profile`. Devices that only
+  completed NETCONF negotiation through OpenSSH defaults may need `legacy`
+  or `auto` (permissive mode only).
+- Misspelled keys in routing-monitor device files and the credentials file
+  now fail loading; correct typos before upgrading.
+
+## [2.0.3] - 2026-11-10
+
+### Security
+
+- Restrict SSH platforms to bundled definitions, preserve `cisco_ios` as an
+  alias for `cisco_iosxe`, and reject unsafe SSH host arguments.
+- Enforce explicit OpenSSH key-exchange, cipher and MAC profiles. Verified
+  host-key policies explicitly enable checking; pinned policy excludes global
+  known-hosts files and known-hosts commands.
+- Reject unknown workbook, inventory and parser schema keys. Limit workbook
+  environment overrides to the documented `FAIL_ON_FAIL` binding.
+- Expand vendor-secret redaction and sanitize approval prompts and logs.
+  Channel transcripts now retain byte counts rather than raw stream contents.
+- Bind resume to execution identity, runtime bindings and configuration/file
+  dependencies. Refuse ambiguous or output-dependent resumes rather than
+  replaying completed mutations or skipping unfinished work.
+- Require an administrator syslog destination allowlist and verified TLS in
+  production. Enforce production transport policy in helper CLIs.
+- Separate read-only release builds/scans from artifact-only publication,
+  disable checkout credential persistence, and require configured release
+  reviewers before publication.
+- Replace development gRPC with stable v1.85.0 containing the original
+  HTTP/2 security fix. Exclude private audit material from Docker contexts.
+
+### Compatibility and upgrade notes
+
+- Custom SSH platform paths and URLs are no longer accepted.
+- Unknown configuration keys now fail loading; correct typos before upgrading.
+- `session_transcript` no longer writes raw channel data. Protected command
+  output remains available through the normal output settings.
+- Resume requires manifest format 2; previous run directories cannot resume.
+  Runtime-selected payload paths and completed mutations whose output or
+  dependent actions cannot be reconstructed require manual reconciliation.
+- Configure `NETWORK_COLLECTOR_SYSLOG_ALLOWED_ADDRESSES` with exact
+  `host:port` endpoints. Plaintext syslog/helper transports require explicit
+  `security_mode: permissive`.
+
+### Monitoring
+
 - Keep cross-device username defaults tied to successful monitor connections;
   failed attempts retain their username only for retries on the same device.
 - Add a separate SSH host-key mismatch confirmation flow during monitor

@@ -132,24 +132,32 @@ netconf:
   - hostname: device-eos-05
     ip: 192.0.2.7
     type: arista_eos
-    rpc: |
-      <get>
-        <filter type="subtree">
-          <interfaces>
-            <interface>
-            </interface>
-          </interfaces>
-        </filter>
-      </get>
+    steps:
+      - name: get-interfaces
+        netconf:
+          operation: rpc
+          payload: |
+            <get>
+              <filter type="subtree">
+                <interfaces>
+                  <interface>
+                  </interface>
+                </interfaces>
+              </filter>
+            </get>
   - hostname: device-eos
     ip: 192.0.2.8
     type: arista_eos
-    rpc: |
-      <get>
-        <filter type="subtree">
-          <interfaces>
-            <interface>
-            </interface>
-          </interfaces>
-        </filter>
-      </get>
+    steps:
+      - name: get-interfaces
+        netconf:
+          operation: rpc
+          payload: |
+            <get>
+              <filter type="subtree">
+                <interfaces>
+                  <interface>
+                  </interface>
+                </interfaces>
+              </filter>
+            </get>

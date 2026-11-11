@@ -439,6 +439,7 @@ func executeRepeat(ctx *stepExecutionContext, client **ssh.Client, config Repeat
 		iterationFailed := false
 		iterationCtx := *ctx
 		iterationCtx.runFailed = &iterationFailed
+		iterationCtx.executionPath = fmt.Sprintf("%s/repeat:%d", ctx.executionPath, iteration)
 		iterationStopped := executeStepsAtDepth(&iterationCtx, client, config.Steps, depth)
 		ctx.artifactSeq = iterationCtx.artifactSeq
 		if iterationStopped {
@@ -526,6 +527,7 @@ func executeForeach(ctx *stepExecutionContext, client **ssh.Client, config Forea
 		iterationFailed := false
 		iterationCtx := *ctx
 		iterationCtx.runFailed = &iterationFailed
+		iterationCtx.executionPath = fmt.Sprintf("%s/foreach:%d", ctx.executionPath, index)
 		stopped := scopedVariables(ctx.variables, map[string]string{itemName: value, indexName: strconv.Itoa(index)}, func() bool {
 			return executeStepsAtDepth(&iterationCtx, client, config.Steps, depth)
 		})
@@ -723,6 +725,7 @@ func executeParallel(ctx *stepExecutionContext, config ParallelConfig, stepName 
 			artifacts := []outputArtifact{}
 			var log bytes.Buffer
 			branchCtx := *ctx
+			branchCtx.executionPath = fmt.Sprintf("%s/parallel:%d", ctx.executionPath, index)
 			branchCtx.variables = cloneVariables(base)
 			branchCtx.runFailed = &failed
 			branchCtx.aggregated = &validations
@@ -823,6 +826,7 @@ func executeBlock(ctx *stepExecutionContext, client **ssh.Client, config BlockCo
 	}
 	blockFailed := false
 	blockCtx := *ctx
+	blockCtx.executionPath = ctx.executionPath + "/block"
 	blockCtx.runFailed = &blockFailed
 	stopped := executeStepsAtDepth(&blockCtx, client, config.Steps, depth)
 	ctx.artifactSeq = blockCtx.artifactSeq
@@ -839,6 +843,7 @@ func executeBlock(ctx *stepExecutionContext, client **ssh.Client, config BlockCo
 		}
 		rescueFailed := false
 		rescueCtx := *ctx
+		rescueCtx.executionPath = ctx.executionPath + "/recovery"
 		rescueCtx.runFailed = &rescueFailed
 		rescueStopped := executeStepsAtDepth(&rescueCtx, client, recovery, depth)
 		ctx.artifactSeq = rescueCtx.artifactSeq
@@ -860,6 +865,7 @@ func executeBlock(ctx *stepExecutionContext, client **ssh.Client, config BlockCo
 		}
 		alwaysFailed := false
 		alwaysCtx := *ctx
+		alwaysCtx.executionPath = ctx.executionPath + "/always"
 		alwaysCtx.runFailed = &alwaysFailed
 		alwaysStopped := executeStepsAtDepth(&alwaysCtx, client, config.Always, depth)
 		ctx.artifactSeq = alwaysCtx.artifactSeq
@@ -879,8 +885,15 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 	}
 	inheritedCategory := ctx.progressCategory
 	defer func() { ctx.progressCategory = inheritedCategory }()
+	parentPath := ctx.executionPath
+	stepOffset := ctx.stepIndexOffset
+	ctx.stepIndexOffset = 0
+	defer func() { ctx.executionPath = parentPath; ctx.stepIndexOffset = stepOffset }()
 	stopDeviceSteps := false
-	for _, step := range steps {
+	for stepIndex, step := range steps {
+		ctx.executionPath = fmt.Sprintf("%s/step:%d", parentPath, stepOffset+stepIndex)
+		instanceID := executionID(ctx)
+		inputDigest := executionBinding(ctx)
 		if err := validateConfirmation(step); err != nil {
 			*ctx.runFailed = true
 			recordStepFailure(ctx, step.Name, err.Error())
@@ -904,9 +917,22 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 			headingCategory = inheritedCategory
 		}
 		writeSessionStepHeading(ctx, stepName, headingCategory)
-		if kind := resumableMutationKind(step); kind != "" && kind != "ensure" && ctx.resumeCompleted[journalEntryKey(runJournalEntry{Hostname: ctx.hostname, IP: ctx.ip, Step: stepName, Occurrence: ctx.occurrence})] {
-			writeSessionf(ctx.sessionLog, "[step:%s] skipped: completed in verified prior run\n", stepName)
-			continue
+		if kind := resumableMutationKind(step); kind != "" && kind != "ensure" {
+			key := journalEntryKey(runJournalEntry{Hostname: ctx.hostname, IP: ctx.ip, Step: stepName, ExecutionID: instanceID, Occurrence: ctx.occurrence})
+			if previous, completed := ctx.resumeCompleted[key]; completed {
+				if step.Register != "" || len(stepValidations(step)) > 0 || step.OnPass != nil || step.OnFail != nil || step.Drift != nil {
+					*ctx.runFailed = true
+					recordStepFailure(ctx, stepName, "resume cannot reconstruct completed command output or its dependent validation/actions; reconcile this step before starting a new run")
+					return true
+				}
+				if previous != inputDigest {
+					*ctx.runFailed = true
+					recordStepFailure(ctx, stepName, "resume runtime bindings differ from the completed execution; refusing replay or skip")
+					return true
+				}
+				writeSessionf(ctx.sessionLog, "[step:%s] skipped: completed in verified prior run\n", stepName)
+				continue
+			}
 		}
 		if ctx.runContext != nil && ctx.runContext.Err() != nil {
 			writeSessionf(ctx.sessionLog, "[step:%s] not started: run interrupted\n", stepName)
@@ -1179,9 +1205,10 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 		for {
 			attempt++
 			writeSessionf(ctx.sessionLog, "\n[step:%s] attempt %d at %s\n\n", protectHumanOutput(stepName), attempt, time.Now().UTC().Format(time.RFC3339))
+			inputDigest = executionBinding(ctx)
 			mutationKind := resumableMutationKind(step)
 			if mutationKind != "" && !ctx.checkMode {
-				entry := runJournalEntry{State: "intent", Hostname: ctx.hostname, IP: ctx.ip, Step: stepName, Occurrence: ctx.occurrence, Kind: mutationKind}
+				entry := runJournalEntry{State: "intent", Hostname: ctx.hostname, IP: ctx.ip, Step: stepName, ExecutionID: instanceID, InputDigest: inputDigest, Occurrence: ctx.occurrence, Kind: mutationKind}
 				if err := ctx.journal.append(entry); err != nil {
 					*ctx.runFailed = true
 					recordStepFailure(ctx, stepName, fmt.Sprintf("write-ahead journal error: %v", err))
@@ -1259,7 +1286,7 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 				*client = nil
 			}
 			if mutationKind != "" && !ctx.checkMode {
-				if err := ctx.journal.append(runJournalEntry{State: "completed", Hostname: ctx.hostname, IP: ctx.ip, Step: stepName, Occurrence: ctx.occurrence, Kind: mutationKind}); err != nil {
+				if err := ctx.journal.append(runJournalEntry{State: "completed", Hostname: ctx.hostname, IP: ctx.ip, Step: stepName, ExecutionID: instanceID, InputDigest: inputDigest, Occurrence: ctx.occurrence, Kind: mutationKind}); err != nil {
 					*ctx.runFailed = true
 					recordStepFailure(ctx, stepName, fmt.Sprintf("completion journal error: %v", err))
 					break
@@ -1442,7 +1469,10 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 			}
 
 			action := validationActionForResult(step, finalResult)
-			outcome, err := executeValidationAction(ctx, client, action, stepName)
+			actionCtx := *ctx
+			actionCtx.executionPath = fmt.Sprintf("%s/action:%t/attempt:%d", ctx.executionPath, finalResult.Pass, attempt)
+			outcome, err := executeValidationAction(&actionCtx, client, action, stepName)
+			ctx.artifactSeq = actionCtx.artifactSeq
 			if err != nil {
 				*ctx.runFailed = true
 				slog.Error("validation action failed", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName, "error", err)
@@ -1752,7 +1782,11 @@ func gnmiTriggerHandlerWithBudget(ctx *stepExecutionContext, sshClient **ssh.Cli
 				recordStepFailure(ctx, name, fmt.Sprintf("gNMI trigger fired: path=%s metric=%s threshold=%s", event.Path, metricValue, thresholdValue))
 			}
 			scopedVariables(ctx.variables, bindings, func() bool {
-				return executeStepsAtDepth(ctx, sshClient, trigger.Steps, depth+1)
+				triggerCtx := *ctx
+				triggerCtx.executionPath = fmt.Sprintf("%s/trigger:%d/fire:%d", ctx.executionPath, index, fireCounts[index])
+				stopped := executeStepsAtDepth(&triggerCtx, sshClient, trigger.Steps, depth+1)
+				ctx.artifactSeq = triggerCtx.artifactSeq
+				return stopped
 			})
 		}
 		return nil

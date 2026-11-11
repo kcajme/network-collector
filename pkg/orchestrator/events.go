@@ -356,3 +356,30 @@ type DeviceOutcome struct {
 	Failed   bool          `json:"failed"`
 	Duration time.Duration `json:"duration_ns,omitempty"`
 }
+
+// NewSyslogSinkWithPolicy requires an administrator-approved host:port endpoint.
+// Internal collectors are allowed explicitly; TLS authenticates their identity.
+func NewSyslogSinkWithPolicy(network, address, appName string, timeout time.Duration, allowedAddresses []string, allowPlaintext bool) (*SyslogSink, error) {
+	network = strings.ToLower(strings.TrimSpace(network))
+	if network == "" {
+		network = "tls"
+	}
+	if network != "tls" && !allowPlaintext {
+		return nil, fmt.Errorf("production syslog requires TLS")
+	}
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || host == "" || port == "" {
+		return nil, fmt.Errorf("syslog requires a host:port address")
+	}
+	allowed := false
+	for _, candidate := range allowedAddresses {
+		h, p, e := net.SplitHostPort(strings.TrimSpace(candidate))
+		if e == nil && normalizeWebhookHost(h) == normalizeWebhookHost(host) && p == port {
+			allowed = true
+		}
+	}
+	if !allowed {
+		return nil, fmt.Errorf("syslog address is not in NETWORK_COLLECTOR_SYSLOG_ALLOWED_ADDRESSES")
+	}
+	return NewSyslogSink(network, address, appName, timeout)
+}

@@ -276,6 +276,7 @@ type ValidationConfig struct {
 type Config struct {
 	checkpoints       map[string]*hostCheckpoint
 	progress          *progressDisplay
+	FailOnFail        bool                      `mapstructure:"fail_on_fail" yaml:"fail_on_fail"`
 	Imports           []string                  `mapstructure:"imports" yaml:"imports"`
 	NamePlaybook      string                    `mapstructure:"name_playbook" yaml:"name_playbook"`
 	SecurityMode      string                    `mapstructure:"security_mode" yaml:"security_mode"`
@@ -293,6 +294,7 @@ type Config struct {
 	SSHSecurity       SSHSecurityConfig         `mapstructure:"ssh_security" yaml:"ssh_security"`
 	Facts             FactsDefaultsConfig       `mapstructure:"facts" yaml:"facts"`
 	Credentials       CredentialProviderConfig  `mapstructure:"credentials" yaml:"credentials"`
+	inputDigests      map[string]string
 	baseDir           string
 	checkMode         bool
 }
@@ -515,7 +517,9 @@ type stepExecutionContext struct {
 	gnmiActionBudget *gnmiDeviceActionBudget
 	journal          *runJournal
 	occurrence       int
-	resumeCompleted  map[string]bool
+	resumeCompleted  map[string]string
+	executionPath    string
+	stepIndexOffset  int
 }
 
 type gnmiDeviceActionBudget struct {

@@ -4,21 +4,21 @@ go 1.27.3
 
 require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/itchyny/gojq v0.12.19
+	github.com/itchyny/gojq v0.12.20
 	github.com/openconfig/gnmi v0.14.1
 	github.com/openconfig/gnmic v0.49.1
 	// Match gnmic v0.49.0's release commit: API v0.1.11 lacks RedactedDeepCopy.
 	github.com/openconfig/gnmic/pkg/api v0.1.12-0.20260916192211-ce0d4173630a
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
-	github.com/scrapli/scrapligo v1.4.3
+	github.com/scrapli/scrapligo v1.4.4
 	github.com/sirikothe/gotextfsm v1.2.0
 	github.com/spf13/viper v1.21.0
 	github.com/tidwall/gjson v1.20.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0
-	// Pin the HTTP/2 server security fix until it is available in a stable release.
-	google.golang.org/grpc v1.86.0-dev
+	// Stable release containing the HTTP/2 server security fix.
+	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -40,7 +40,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
-	github.com/itchyny/timefmt-go v0.1.8 // indirect
+	github.com/itchyny/timefmt-go v0.1.9 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
 	github.com/jcmturner/gofork v1.7.6 // indirect
@@ -49,7 +49,7 @@ require (
 	github.com/jhump/protoreflect v1.18.1 // indirect
 	github.com/jhump/protoreflect/v2 v2.0.0-beta.2 // indirect
 	github.com/karimra/go-map-flattener v0.0.1 // indirect
-	github.com/klauspost/compress v1.19.1 // indirect
+	github.com/klauspost/compress v1.20.2 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/openconfig/grpctunnel v0.2.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
@@ -68,7 +68,7 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/zestor-dev/zestor v0.0.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/net v0.60.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/text v0.43.0 // indirect

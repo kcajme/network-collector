@@ -15,32 +15,29 @@ import (
 type netconfConnector func(string, string, string, netconfConnectionPolicy) (*netconf.ScrapligoNETCONF, error)
 
 type lazyNETCONFExecutor struct {
-	once           sync.Once
-	client         *netconf.ScrapligoNETCONF
-	host           string
-	username       string
-	password       string
-	timeout        time.Duration
-	hostKeyPolicy  string
-	knownHostsFile string
-	connectClient  netconfConnector
-	err            error
+	once          sync.Once
+	client        *netconf.ScrapligoNETCONF
+	host          string
+	username      string
+	password      string
+	policy        netconfConnectionPolicy
+	connectClient netconfConnector
+	err           error
 }
 
 type netconfConnectionPolicy struct {
-	timeout        time.Duration
-	hostKeyPolicy  string
-	knownHostsFile string
+	timeout         time.Duration
+	securityProfile string
+	hostKeyPolicy   string
+	knownHostsFile  string
 }
 
 func newLazyNETCONFExecutor(host, username, password string, policy netconfConnectionPolicy) *lazyNETCONFExecutor {
 	return &lazyNETCONFExecutor{
-		host:           host,
-		username:       username,
-		password:       password,
-		timeout:        policy.timeout,
-		hostKeyPolicy:  policy.hostKeyPolicy,
-		knownHostsFile: policy.knownHostsFile,
+		host:     host,
+		username: username,
+		password: password,
+		policy:   policy,
 	}
 }
 
@@ -51,6 +48,7 @@ func connectScrapligoNETCONF(host, username, password string, policy netconfConn
 		username,
 		password,
 		netconf.WithNetconfTimeouts(policy.timeout, policy.timeout),
+		netconf.WithSecurityProfile(policy.securityProfile),
 		netconf.WithHostKeyPolicy(policy.hostKeyPolicy, policy.knownHostsFile),
 	)
 	return client, err
@@ -62,16 +60,7 @@ func (executor *lazyNETCONFExecutor) connect() error {
 		if connectClient == nil {
 			connectClient = connectScrapligoNETCONF
 		}
-		executor.client, executor.err = connectClient(
-			executor.host,
-			executor.username,
-			executor.password,
-			netconfConnectionPolicy{
-				timeout:        executor.timeout,
-				hostKeyPolicy:  executor.hostKeyPolicy,
-				knownHostsFile: executor.knownHostsFile,
-			},
-		)
+		executor.client, executor.err = connectClient(executor.host, executor.username, executor.password, executor.policy)
 	})
 	return executor.err
 }

@@ -11,10 +11,12 @@ import (
 
 	"github.com/gwoodwa1/network-collector/pkg/drivers"
 	"github.com/gwoodwa1/network-collector/pkg/drivers/hostkey"
+	"github.com/gwoodwa1/network-collector/pkg/drivers/sshprofile"
 	"github.com/scrapli/scrapligo/driver/netconf"
 	"github.com/scrapli/scrapligo/driver/opoptions"
 	scraplioptions "github.com/scrapli/scrapligo/driver/options"
 	"github.com/scrapli/scrapligo/response"
+	"github.com/scrapli/scrapligo/transport"
 	"github.com/scrapli/scrapligo/util"
 )
 
@@ -106,7 +108,10 @@ type ScrapligoNETCONF struct {
 	closeTimeout  time.Duration
 	hostKeyPolicy hostkey.Policy
 	hostKeyError  error
-	newSession    func(string, ...util.Option) (netconfSession, error)
+	// securityProfile pins SSH algorithms exactly as the CLI SSH driver
+	// does; empty means "modern".
+	securityProfile string
+	newSession      func(string, ...util.Option) (netconfSession, error)
 }
 
 func WithNetconfTimeouts(socketTimeout, opsTimeout time.Duration) Option {
@@ -132,6 +137,16 @@ func WithHostKeyPolicy(policy, knownHostsFile string) Option {
 			return
 		}
 		device.hostKeyPolicy, device.hostKeyError = hostkey.New(policy, knownHostsFile)
+	}
+}
+
+// WithSecurityProfile applies the SSH algorithm profile (modern, legacy,
+// compatibility or auto) used by the CLI SSH driver to the NETCONF session.
+func WithSecurityProfile(profile string) Option {
+	return func(d interface{}) {
+		if device, ok := d.(*ScrapligoNETCONF); ok && device != nil {
+			device.securityProfile = profile
+		}
 	}
 }
 
@@ -169,13 +184,20 @@ func (n *ScrapligoNETCONF) Connect(host, username, password string, opts ...Opti
 	if n.hostKeyPolicy.Name() == "insecure" {
 		slog.Warn("NETCONF SSH host-key verification is disabled; use only for explicitly approved lab devices", "host", n.host)
 	}
+	if err := sshprofile.ValidateHost(n.host); err != nil {
+		return err
+	}
+	profile, err := sshprofile.Normalize(n.securityProfile)
+	if err != nil {
+		return err
+	}
 
 	options := []util.Option{
 		scraplioptions.WithAuthUsername(username),
 		scraplioptions.WithAuthPassword(password),
 		scraplioptions.WithPort(830),
 	}
-	options, err := n.hostKeyPolicy.Apply(options)
+	options, err = n.hostKeyPolicy.Apply(options)
 	if err != nil {
 		return err
 	}
@@ -186,6 +208,22 @@ func (n *ScrapligoNETCONF) Connect(host, username, password string, opts ...Opti
 		options = append(options, scraplioptions.WithTimeoutOps(n.opsTimeout))
 	}
 
+	if profile != "auto" {
+		return n.open(options, profile)
+	}
+	err = n.open(options, "modern")
+	if err == nil || !sshprofile.IsNegotiationError(err) {
+		return err
+	}
+	slog.Warn("modern NETCONF SSH negotiation failed; retrying with legacy compatibility algorithms", "host", n.host, "error", err)
+	return n.open(options, "legacy")
+}
+
+func (n *ScrapligoNETCONF) open(base []util.Option, profile string) error {
+	options := append(append([]util.Option(nil), base...),
+		scraplioptions.WithTransportType(transport.SystemTransport),
+		scraplioptions.WithSystemTransportOpenArgs(sshprofile.Args(profile)),
+	)
 	newSession := n.newSession
 	if newSession == nil {
 		newSession = func(host string, options ...util.Option) (netconfSession, error) {

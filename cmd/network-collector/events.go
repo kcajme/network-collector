@@ -49,7 +49,7 @@ func newJSONLEventSink(path string) (eventSink, error) {
 	return orchestrator.NewJSONLSink(path)
 }
 
-func newNetworkEventSink(config EventSinkConfig) (eventSink, error) {
+func newNetworkEventSink(config EventSinkConfig, securityMode string) (eventSink, error) {
 	timeout := time.Duration(config.TimeoutSeconds) * time.Second
 	var sink eventSink
 	var err error
@@ -71,7 +71,12 @@ func newNetworkEventSink(config EventSinkConfig) (eventSink, error) {
 			orchestrator.WebhookPolicy{AllowedHosts: allowedHosts},
 		)
 	case "syslog":
-		sink, err = orchestrator.NewSyslogSink(config.Network, config.Address, config.AppName, timeout)
+		mode, modeErr := normalizeSecurityMode(securityMode)
+		if modeErr != nil {
+			return nil, modeErr
+		}
+		sink, err = orchestrator.NewSyslogSinkWithPolicy(config.Network, config.Address, config.AppName, timeout,
+			splitAllowedHosts(os.Getenv("NETWORK_COLLECTOR_SYSLOG_ALLOWED_ADDRESSES")), mode == securityModePermissive)
 	default:
 		return nil, fmt.Errorf("unsupported event sink type %q", config.Type)
 	}
