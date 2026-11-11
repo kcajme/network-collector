@@ -234,6 +234,7 @@ type RepeatConfig struct {
 }
 
 type DeviceConfig struct {
+	NETCONFPort       int                    `mapstructure:"netconf_port" yaml:"netconf_port"`
 	Hostname          string                 `mapstructure:"hostname" yaml:"hostname"`
 	IP                string                 `mapstructure:"ip" yaml:"ip"`
 	Host              string                 `mapstructure:"host" yaml:"host"`
@@ -372,6 +373,7 @@ type ExecutionConfig struct {
 }
 
 type InventoryHostConfig struct {
+	NETCONFPort       int                    `yaml:"netconf_port"`
 	Name              string                 `yaml:"name"`
 	Hostname          string                 `yaml:"hostname"`
 	IP                string                 `yaml:"ip"`

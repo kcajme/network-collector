@@ -26,6 +26,7 @@ type lazyNETCONFExecutor struct {
 }
 
 type netconfConnectionPolicy struct {
+	port            int
 	timeout         time.Duration
 	securityProfile string
 	hostKeyPolicy   string
@@ -48,6 +49,7 @@ func connectScrapligoNETCONF(host, username, password string, policy netconfConn
 		username,
 		password,
 		netconf.WithNetconfTimeouts(policy.timeout, policy.timeout),
+		netconf.WithPort(policy.port),
 		netconf.WithSecurityProfile(policy.securityProfile),
 		netconf.WithHostKeyPolicy(policy.hostKeyPolicy, policy.knownHostsFile),
 	)
@@ -178,4 +180,11 @@ func collectFactsOutput(ctx *stepExecutionContext, client **ssh.Client, step Ste
 		return "", fmt.Errorf("encode facts: %w", err)
 	}
 	return string(encoded), nil
+}
+
+func validateNETCONFPort(port int) error {
+	if port < 0 || port > 65535 {
+		return fmt.Errorf("netconf_port must be between 1 and 65535 (or 0 for default 830)")
+	}
+	return nil
 }

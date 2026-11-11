@@ -52,6 +52,9 @@ func applyInventoryHost(device DeviceConfig, host InventoryHostConfig) DeviceCon
 	if strings.TrimSpace(resolved.Type) == "" {
 		resolved.Type = strings.TrimSpace(host.Type)
 	}
+	if resolved.NETCONFPort == 0 {
+		resolved.NETCONFPort = host.NETCONFPort
+	}
 	if resolved.Timeout == 0 {
 		resolved.Timeout = host.Timeout
 	}
@@ -130,6 +133,9 @@ func loadInventory(inventoryFile, configFile string) (*InventoryConfig, error) {
 
 	inventory.baseDir = filepath.Dir(path)
 	for index := range inventory.Hosts {
+		if err := validateNETCONFPort(inventory.Hosts[index].NETCONFPort); err != nil {
+			return nil, fmt.Errorf("inventory host %d: %w", index, err)
+		}
 		resolveGNMICertificatePaths(inventory.Hosts[index].GNMI, inventory.baseDir)
 	}
 	return &inventory, nil

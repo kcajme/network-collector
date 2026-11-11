@@ -1,0 +1,13 @@
+# IOS XR: enable the router's NETCONF SSH subsystem with ssh server netconf.
+# The existing inventory contains only generic host names and documentation IPs.
+inventory_file: inventory.yaml
+netconf:
+  - type: cisco_iosxr
+    netconf_port: 22
+    operation_timeout: 1800
+    steps:
+      - name: get-running-config
+        category: Pre checks
+        netconf:
+          operation: get-config
+          source: running

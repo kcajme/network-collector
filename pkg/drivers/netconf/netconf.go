@@ -102,6 +102,7 @@ func (s *scrapligoSession) DeleteConfig(target string) (*response.NetconfRespons
 
 type ScrapligoNETCONF struct {
 	host          string
+	port          int
 	network       netconfSession
 	socketTimeout time.Duration
 	opsTimeout    time.Duration
@@ -112,6 +113,15 @@ type ScrapligoNETCONF struct {
 	// does; empty means "modern".
 	securityProfile string
 	newSession      func(string, ...util.Option) (netconfSession, error)
+}
+
+// WithPort selects the NETCONF SSH subsystem port (default 830).
+func WithPort(port int) Option {
+	return func(d interface{}) {
+		if device, ok := d.(*ScrapligoNETCONF); ok && device != nil {
+			device.port = port
+		}
+	}
 }
 
 func WithNetconfTimeouts(socketTimeout, opsTimeout time.Duration) Option {
@@ -172,6 +182,13 @@ func (n *ScrapligoNETCONF) Connect(host, username, password string, opts ...Opti
 		}
 		opt(n)
 	}
+	if n.port < 0 || n.port > 65535 {
+		return fmt.Errorf("NETCONF port must be between 1 and 65535")
+	}
+	port := n.port
+	if port == 0 {
+		port = 830
+	}
 	if n.hostKeyError != nil {
 		return n.hostKeyError
 	}
@@ -195,7 +212,7 @@ func (n *ScrapligoNETCONF) Connect(host, username, password string, opts ...Opti
 	options := []util.Option{
 		scraplioptions.WithAuthUsername(username),
 		scraplioptions.WithAuthPassword(password),
-		scraplioptions.WithPort(830),
+		scraplioptions.WithPort(port),
 	}
 	options, err = n.hostKeyPolicy.Apply(options)
 	if err != nil {

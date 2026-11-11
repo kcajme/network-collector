@@ -469,6 +469,13 @@ func loadConfig(configFile string) (Config, bool, error) {
 	))); err != nil {
 		return Config{}, false, err
 	}
+	for _, targets := range [][]DeviceConfig{config.SSH, config.NETCONF} {
+		for _, target := range targets {
+			if err := validateNETCONFPort(target.NETCONFPort); err != nil {
+				return Config{}, false, err
+			}
+		}
+	}
 	if err := rejectRemovedLocalExecution(config); err != nil {
 		return Config{}, false, err
 	}

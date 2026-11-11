@@ -747,7 +747,35 @@ Use a top-level `netconf` target when every executable device step should run
 through NETCONF rather than a CLI SSH session. Targets use the same inventory,
 credential providers, selectors, scheduling, workflow controls, validation,
 retry, registration, drift, and artifact handling as `ssh` targets. NETCONF
-connects to port 830 and uses `operation_timeout` for RPC operations.
+connects to port 830 by default and uses `operation_timeout` for RPC operations.
+Set `netconf_port: 22` on the target to use the NETCONF SSH subsystem on port 22,
+including IOS XR routers configured with `ssh server netconf`. This opens a
+NETCONF session, not an interactive CLI shell. Other ports from 1 to 65535 are
+also supported. The setting can be inherited from an inventory host; an explicit
+workflow target value takes precedence. Omitted or zero values use port 830.
+The setting also applies to NETCONF steps and facts within an `ssh:` workflow;
+it does not change the CLI SSH connection port. Existing SSH host-key and
+algorithm policies still apply.
+
+For a flat IOS XR inventory containing only names and IPs:
+
+```yaml
+inventory_file: inventory.yaml
+
+netconf:
+  - type: cisco_iosxr
+    netconf_port: 22
+    operation_timeout: 1800
+    steps:
+      - name: get-running-config
+        category: Pre checks
+        netconf:
+          operation: get-config
+          source: running
+```
+
+This targets all hosts in that inventory. See
+`examples/simple-inventory/netconf-port22.yaml` for the same example.
 
 ```yaml
 inventory_file: inventory.yaml
