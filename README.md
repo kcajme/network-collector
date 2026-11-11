@@ -702,6 +702,42 @@ the normal timeout to reach the question. This timeout is not a substitute for
 handling the prompt. Interactive confirmation is supported only for SSH commands.
 
 
+### NETCONF-only workflows that reboot
+
+After an acknowledged reboot/activation RPC, use a wait-only step followed by
+NETCONF reconnection. This reconnects the NETCONF subsystem and verifies its
+hello exchange; it does not open an interactive CLI session:
+
+```yaml
+- name: wait-for-reboot
+  wait_seconds: 840
+- name: reconnect-netconf
+  netconf:
+    operation: reconnect
+    max_attempts: 40
+    interval_seconds: 60
+```
+
+Reconnection retries only connection establishment. Failed mutating RPCs stop
+the host and are never treated as successful just because the router disconnects.
+Arrange for the router to acknowledge a reboot before it drops the session,
+for example using a supported delayed reboot RPC. A new session does not prove
+that an install operation completed; poll the operation ID and final version.
+
+NETCONF RPC replies can use `register_integer` to capture a single bounded numeric
+operation ID. Only integers captured from NETCONF replies can be interpolated
+into subsequent explicit `operation: rpc` XML payloads. Ordinary registered
+device output remains blocked there, and numeric captures cannot select
+NETCONF operations, datastores, or payload files.
+
+For filtered pre/post operational XML, parsers support `type: xml_snapshot` with
+`root: '{namespace-uri}element-name'`. The resulting JSON ignores sibling order,
+prefix spelling, insignificant whitespace and attributes, while preserving
+namespace URIs, text and element associations. Filter volatile fields out in the
+NETCONF request. Missing/duplicate roots, malformed XML and complexity limits
+fail the parser; it does not turn missing data into an empty successful snapshot.
+Use this parser for element-based operational data, not attribute-bearing data.
+
 ### Inventory-based SSH targets
 
 Keep only host names and addresses in `inventory.yaml`. Groups are optional;
@@ -753,6 +789,8 @@ including IOS XR routers configured with `ssh server netconf`. This opens a
 NETCONF session, not an interactive CLI shell. Other ports from 1 to 65535 are
 also supported. The setting can be inherited from an inventory host; an explicit
 workflow target value takes precedence. Omitted or zero values use port 830.
+NETCONF connection establishment uses the target's `timeout` (default 30 seconds),
+separately from the RPC `operation_timeout`.
 The setting also applies to NETCONF steps and facts within an `ssh:` workflow;
 it does not change the CLI SSH connection port. Existing SSH host-key and
 algorithm policies still apply.
@@ -2269,7 +2307,7 @@ stop the device's remaining steps, regardless of `fail_on_fail`, and cannot
 reuse an earlier ID. Ordinary validation extraction cannot overwrite this value.
 `expected_type: int` alone does not enable command interpolation.
 
-`register_integer` is supported on SSH command steps without `retry` or other
+`register_integer` is supported on SSH command steps and explicit NETCONF RPC steps without `retry` or other
 control/transport fields. Retry status checks, not commands initiating upgrades.
 Its value can be used in SSH commands (including validation action commands),
 messages and validations; it remains blocked in NETCONF and declarative ensure

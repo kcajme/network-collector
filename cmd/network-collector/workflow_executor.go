@@ -1453,7 +1453,7 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 			recordStepFailure(ctx, stepName, "bounded integer capture did not complete")
 			return true
 		}
-		if stepExecutionFailed && (step.Ensure != nil || step.Confirmation != nil) {
+		if stepExecutionFailed && (step.Ensure != nil || step.Confirmation != nil || step.NETCONF != nil) {
 			stopDeviceSteps = true
 			slog.Info("stopping remaining steps after ensure or confirmation failure", "hostname", ctx.hostname, "ip", ctx.ip, "step", stepName)
 			break

@@ -62,10 +62,20 @@ func renderNETCONFStep(config NETCONFStepConfig, vars map[string]string, baseDir
 
 func validateNETCONFStep(config NETCONFStepConfig) error {
 	operation := strings.ToLower(strings.TrimSpace(config.Operation))
+	if operation != "reconnect" && (config.MaxAttempts != 0 || config.IntervalSeconds != 0) {
+		return fmt.Errorf("NETCONF readiness settings require operation: reconnect")
+	}
 	if operation == "" {
 		operation = "rpc"
 	}
 	switch operation {
+	case "reconnect":
+		if hasAnyNETCONFArguments(config) {
+			return fmt.Errorf("NETCONF reconnect does not accept RPC payloads or datastore fields")
+		}
+		if config.MaxAttempts < 1 || config.MaxAttempts > 1000 || config.IntervalSeconds < 1 {
+			return fmt.Errorf("NETCONF reconnect requires max_attempts 1..1000 and positive interval_seconds")
+		}
 	case "rpc":
 		if config.Payload == "" {
 			return fmt.Errorf("netconf.payload or netconf.payload_file is required for rpc")
@@ -207,6 +217,15 @@ func executeNETCONFStep(ctx *stepExecutionContext, config NETCONFStepConfig) (st
 			message += "\n" + rendered.Payload
 		}
 		return message, display, nil
+	}
+	if operation == "reconnect" {
+		if ctx.checkMode {
+			return "[check] NETCONF reconnect skipped", display, nil
+		}
+		if err := reconnectNETCONF(ctx, rendered); err != nil {
+			return "", display, err
+		}
+		return "NETCONF session re-established", display, nil
 	}
 	output, err := ctx.netconf.ExecuteNETCONF(rendered)
 	return output, display, err

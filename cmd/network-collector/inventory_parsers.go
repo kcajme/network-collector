@@ -360,6 +360,8 @@ func parseOutputWithModule(output, parserName string, parsers map[string]ParserM
 		return parseWithRegexModule(output, parser)
 	case "regex_records":
 		return parseWithRegexRecords(output, parser)
+	case "xml_snapshot":
+		return parseXMLSnapshot(output, parser.Root)
 	case "textfsm":
 		return parseWithTextFSM(output, parser)
 	default:

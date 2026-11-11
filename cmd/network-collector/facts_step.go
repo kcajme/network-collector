@@ -26,11 +26,12 @@ type lazyNETCONFExecutor struct {
 }
 
 type netconfConnectionPolicy struct {
-	port            int
-	timeout         time.Duration
-	securityProfile string
-	hostKeyPolicy   string
-	knownHostsFile  string
+	connectionTimeout time.Duration
+	port              int
+	timeout           time.Duration
+	securityProfile   string
+	hostKeyPolicy     string
+	knownHostsFile    string
 }
 
 func newLazyNETCONFExecutor(host, username, password string, policy netconfConnectionPolicy) *lazyNETCONFExecutor {
@@ -44,11 +45,15 @@ func newLazyNETCONFExecutor(host, username, password string, policy netconfConne
 
 func connectScrapligoNETCONF(host, username, password string, policy netconfConnectionPolicy) (*netconf.ScrapligoNETCONF, error) {
 	client := &netconf.ScrapligoNETCONF{}
+	socketTimeout := policy.connectionTimeout
+	if socketTimeout <= 0 {
+		socketTimeout = 30 * time.Second
+	}
 	err := client.Connect(
 		host,
 		username,
 		password,
-		netconf.WithNetconfTimeouts(policy.timeout, policy.timeout),
+		netconf.WithNetconfTimeouts(socketTimeout, policy.timeout),
 		netconf.WithPort(policy.port),
 		netconf.WithSecurityProfile(policy.securityProfile),
 		netconf.WithHostKeyPolicy(policy.hostKeyPolicy, policy.knownHostsFile),
@@ -187,4 +192,16 @@ func validateNETCONFPort(port int) error {
 		return fmt.Errorf("netconf_port must be between 1 and 65535 (or 0 for default 830)")
 	}
 	return nil
+}
+
+// Reset discards a stale session before another NETCONF connection attempt.
+// Workflow branches own separate executors; reset runs sequentially per branch.
+func (executor *lazyNETCONFExecutor) Reset(username, password string) {
+	if executor.client != nil {
+		_ = executor.client.Close()
+	}
+	executor.client = nil
+	executor.err = nil
+	executor.username, executor.password = username, password
+	executor.once = sync.Once{}
 }

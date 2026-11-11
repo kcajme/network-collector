@@ -106,6 +106,8 @@ type EnsureAttributesConfig struct {
 }
 
 type NETCONFStepConfig struct {
+	MaxAttempts           int    `mapstructure:"max_attempts" yaml:"max_attempts"`
+	IntervalSeconds       int    `mapstructure:"interval_seconds" yaml:"interval_seconds"`
 	Operation             string `mapstructure:"operation" yaml:"operation"`
 	Target                string `mapstructure:"target" yaml:"target"`
 	Source                string `mapstructure:"source" yaml:"source"`

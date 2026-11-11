@@ -6,10 +6,11 @@ import (
 )
 
 type preflightVariable struct {
-	value   string
-	dynamic bool
-	tainted bool
-	integer bool
+	value          string
+	dynamic        bool
+	tainted        bool
+	integer        bool
+	netconfInteger bool
 }
 
 type preflightScope map[string]preflightVariable
@@ -115,7 +116,17 @@ func preflightStep(step StepConfig, workflows map[string]WorkflowConfig, scope p
 			if err := checkTemplateString(value, scope, path+" netconf."+field); err != nil {
 				return err
 			}
-			if err := rejectTaintedTemplateReferences(value, scope, path+" netconf."+field); err != nil {
+			checkScope := scope
+			if field == "payload" && step.NETCONF.Operation == "rpc" {
+				checkScope = clonePreflightScope(scope)
+				for key, v := range checkScope {
+					if v.netconfInteger {
+						v.tainted = false
+						checkScope[key] = v
+					}
+				}
+			}
+			if err := rejectTaintedTemplateReferences(value, checkScope, path+" netconf."+field); err != nil {
 				return err
 			}
 		}
@@ -136,7 +147,7 @@ func preflightStep(step StepConfig, workflows map[string]WorkflowConfig, scope p
 
 	// A step registers its output before its validation actions execute.
 	if register := strings.TrimSpace(step.Register); register != "" {
-		scope[register] = preflightVariable{dynamic: true, tainted: true, integer: step.RegisterInteger != nil}
+		scope[register] = preflightVariable{dynamic: true, tainted: true, integer: step.RegisterInteger != nil, netconfInteger: step.RegisterInteger != nil && step.NETCONF != nil}
 	}
 	for index, validation := range stepValidations(step) {
 		validationPath := fmt.Sprintf("%s validation[%d]", path, index+1)

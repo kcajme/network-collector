@@ -295,7 +295,7 @@ func resumableMutationKind(step StepConfig) string {
 	}
 	if step.NETCONF != nil {
 		op := strings.ToLower(strings.TrimSpace(step.NETCONF.Operation))
-		if op == "get" || op == "get-config" || op == "validate" {
+		if op == "get" || op == "get-config" || op == "validate" || op == "reconnect" {
 			return ""
 		}
 		return "netconf"
