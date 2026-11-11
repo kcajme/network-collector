@@ -90,7 +90,7 @@ func TestDeviceSpecTablesAcceptsVRFAliases(t *testing.T) {
 // tables() alphabetically sorts its result (fine for every other use —
 // building commands, status-line display, where order doesn't matter), but
 // tableInterfaces must pair table[i] with Interfaces[i] in the order the
-// operator actually wrote them. "RI-WFA-200036.inet.0" sorts before
+// operator actually wrote them. "A-second.inet.0" sorts before
 // "Z-first.inet.0" alphabetically but is declared second here — if
 // tableInterfaces used tables()'s sorted output, it would wrongly pair
 // Z-first.inet.0 (declared first, sorts second) with the second interface
@@ -112,11 +112,11 @@ func TestDeviceSpecTableInterfacesPairsPositionallyNotAlphabetically(t *testing.
 // one for each.
 func TestDeviceSpecTableInterfacesRealWorldShape(t *testing.T) {
 	spec := DeviceSpec{
-		VRF:        flexibleStringList{"RI-FEM-200034.inet.0", "RI-WFA-200036.inet.0"},
+		VRF:        flexibleStringList{"CUSTOMER-A.inet.0", "CUSTOMER-B.inet.0"},
 		Interfaces: []string{"irb.341", "ae72.360"},
 	}
 	got := spec.tableInterfaces()
-	if got["RI-FEM-200034.inet.0"] != "irb.341" || got["RI-WFA-200036.inet.0"] != "ae72.360" {
+	if got["CUSTOMER-A.inet.0"] != "irb.341" || got["CUSTOMER-B.inet.0"] != "ae72.360" {
 		t.Fatalf("expected positional pairing, got %v", got)
 	}
 }
@@ -170,17 +170,17 @@ func TestDeviceSpecTableInterfacesAllowsNonConflictingDuplicateTable(t *testing.
 func TestLoadDeviceSpecsParsesVRFAliasFromYAML(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "devices.yaml")
 	content := `devices:
-  - hostname: mcbas-hl3-1a-core
-    vrf: RI-FEM-200034.inet.0
+  - hostname: junos-core-01
+    vrf: CUSTOMER-A.inet.0
     interfaces: [ae53.340]
-  - hostname: mcbas-hl3-1b-core
-    vrfs: [RI-FEM-200034.inet.0, RI-WFA-200036.inet.0]
+  - hostname: junos-core-02
+    vrfs: [CUSTOMER-A.inet.0, CUSTOMER-B.inet.0]
     interfaces: [ae53.340]
-  - hostname: mcell-hl3-1a-core
-    vrf: [RI-FEM-200034.inet.0, RI-WFA-200036.inet.0]
+  - hostname: junos-core-03
+    vrf: [CUSTOMER-A.inet.0, CUSTOMER-B.inet.0]
     interfaces: [irb.341, ae72.360]
-  - hostname: mcell-hl3-1b-core
-    vrfs: RI-FEM-200034.inet.0
+  - hostname: junos-core-04
+    vrfs: CUSTOMER-A.inet.0
     interfaces: [irb.341]
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -194,24 +194,24 @@ func TestLoadDeviceSpecsParsesVRFAliasFromYAML(t *testing.T) {
 	if len(specs) != 4 {
 		t.Fatalf("expected 4 specs, got %d: %+v", len(specs), specs)
 	}
-	if got := specs[0].tables(); len(got) != 1 || got[0] != "RI-FEM-200034.inet.0" {
+	if got := specs[0].tables(); len(got) != 1 || got[0] != "CUSTOMER-A.inet.0" {
 		t.Fatalf("expected a scalar vrf: to populate tables(), got %v", got)
 	}
-	if got := specs[1].tables(); len(got) != 2 || got[0] != "RI-FEM-200034.inet.0" || got[1] != "RI-WFA-200036.inet.0" {
+	if got := specs[1].tables(); len(got) != 2 || got[0] != "CUSTOMER-A.inet.0" || got[1] != "CUSTOMER-B.inet.0" {
 		t.Fatalf("expected vrfs: to populate tables(), got %v", got)
 	}
 	// A list under the singular vrf: key — the real shape that broke
 	// outright with a YAML type error ("cannot unmarshal !!seq into
 	// string") before VRF became flexibleStringList instead of a plain
 	// string.
-	if got := specs[2].tables(); len(got) != 2 || got[0] != "RI-FEM-200034.inet.0" || got[1] != "RI-WFA-200036.inet.0" {
+	if got := specs[2].tables(); len(got) != 2 || got[0] != "CUSTOMER-A.inet.0" || got[1] != "CUSTOMER-B.inet.0" {
 		t.Fatalf("expected a list under vrf: to populate tables(), got %v", got)
 	}
 	// A scalar under the plural vrfs: key — the documentation says either
 	// alias accepts a scalar or a list; before VRFs became
 	// flexibleStringList this failed with "cannot unmarshal !!str into
 	// []string".
-	if got := specs[3].tables(); len(got) != 1 || got[0] != "RI-FEM-200034.inet.0" {
+	if got := specs[3].tables(); len(got) != 1 || got[0] != "CUSTOMER-A.inet.0" {
 		t.Fatalf("expected a scalar under vrfs: to populate tables(), got %v", got)
 	}
 }

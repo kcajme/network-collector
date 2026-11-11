@@ -219,13 +219,13 @@ func TestGenerateInterfaceReportMarksNextHopChangeEvents(t *testing.T) {
 func TestGenerateInterfaceReportTagsNextHopChangeEventsWithTheirAssociatedInterface(t *testing.T) {
 	dir := t.TempDir()
 	iface := `"interfaces":{"irb.341":{"stats":[{"INPUT_RATE_BPS":"1000","OUTPUT_RATE_BPS":"2000"}]},"ae72.360":{"stats":[{"INPUT_RATE_BPS":"3000","OUTPUT_RATE_BPS":"4000"}]}}`
-	tableInterfaces := `"table_interfaces":{"RI-FEM-200034.inet.0":"irb.341","RI-WFA-200036.inet.0":"ae72.360"}`
+	tableInterfaces := `"table_interfaces":{"CUSTOMER-A.inet.0":"irb.341","CUSTOMER-B.inet.0":"ae72.360"}`
 	content := strings.Join([]string{
-		`{"timestamp":"2026-07-15T10:00:00Z","hostname":"mcell-hl3-1a-core",` + iface + `,"default_route_next_hops":{"RI-FEM-200034.inet.0":{"next_hops":[{"NEXTHOP":"172.16.242.1"}]},"RI-WFA-200036.inet.0":{"next_hops":[{"NEXTHOP":"172.16.242.1"}]}},` + tableInterfaces + `}`,
-		// RI-FEM changes (known association: irb.341); RI-WFA stays the same.
-		`{"timestamp":"2026-07-15T10:01:00Z","hostname":"mcell-hl3-1a-core",` + iface + `,"default_route_next_hops":{"RI-FEM-200034.inet.0":{"next_hops":[{"NEXTHOP":"172.16.242.2"}]},"RI-WFA-200036.inet.0":{"next_hops":[{"NEXTHOP":"172.16.242.1"}]}},` + tableInterfaces + `}`,
+		`{"timestamp":"2026-07-15T10:00:00Z","hostname":"junos-core-03",` + iface + `,"default_route_next_hops":{"CUSTOMER-A.inet.0":{"next_hops":[{"NEXTHOP":"192.0.2.1"}]},"CUSTOMER-B.inet.0":{"next_hops":[{"NEXTHOP":"192.0.2.1"}]}},` + tableInterfaces + `}`,
+		// CUSTOMER-A changes (known association: irb.341); CUSTOMER-B stays the same.
+		`{"timestamp":"2026-07-15T10:01:00Z","hostname":"junos-core-03",` + iface + `,"default_route_next_hops":{"CUSTOMER-A.inet.0":{"next_hops":[{"NEXTHOP":"192.0.2.2"}]},"CUSTOMER-B.inet.0":{"next_hops":[{"NEXTHOP":"192.0.2.1"}]}},` + tableInterfaces + `}`,
 	}, "\n") + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "mcell-hl3-1a-core.jsonl"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "junos-core-03.jsonl"), []byte(content), 0o644); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
 
@@ -238,14 +238,14 @@ func TestGenerateInterfaceReportTagsNextHopChangeEventsWithTheirAssociatedInterf
 		t.Fatalf("read report: %v", err)
 	}
 	got := string(b)
-	if !strings.Contains(got, `"table":"RI-FEM-200034.inet.0"`) {
-		t.Fatalf("expected the RI-FEM-200034.inet.0 change event, got:\n%s", got)
+	if !strings.Contains(got, `"table":"CUSTOMER-A.inet.0"`) {
+		t.Fatalf("expected the CUSTOMER-A.inet.0 change event, got:\n%s", got)
 	}
 	if !strings.Contains(got, `"interface":"irb.341"`) {
 		t.Fatalf("expected the event to carry its associated interface irb.341, got:\n%s", got)
 	}
-	if strings.Contains(got, `"table":"RI-WFA-200036.inet.0"`) {
-		t.Fatalf("expected no event for the unchanged RI-WFA-200036.inet.0 table, got:\n%s", got)
+	if strings.Contains(got, `"table":"CUSTOMER-B.inet.0"`) {
+		t.Fatalf("expected no event for the unchanged CUSTOMER-B.inet.0 table, got:\n%s", got)
 	}
 }
 

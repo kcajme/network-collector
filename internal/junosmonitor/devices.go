@@ -138,8 +138,8 @@ func (spec DeviceSpec) rawTables() []string {
 // table[i] paired with Interfaces[i] — when spec's (raw, as-written) table
 // list and its Interfaces list are the same non-zero length. This is an
 // explicit, opt-in convention for the common case of a device with exactly
-// one interface per VRF (e.g. RI-FEM-200034.inet.0 carried over irb.341,
-// RI-WFA-200036.inet.0 over ae72.360) — the --devices schema has no other
+// one interface per VRF (e.g. CUSTOMER-A.inet.0 carried over irb.341,
+// CUSTOMER-B.inet.0 over ae72.360) — the --devices schema has no other
 // way to express that relationship. Returns nil when the counts differ or
 // either list is empty, meaning "no known association," never "associated
 // with nothing": callers (see Tick.TableInterfaces) must fall back to
