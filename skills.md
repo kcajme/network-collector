@@ -1,5 +1,9 @@
 # Network Collector Playbook Authoring Skill
 
+For CLI-to-NETCONF conversion, use the current dedicated
+[Copilot skill](.github/skills/network-collector-cli-to-netconf/SKILL.md).
+The runtime and that focused guide take precedence over older examples below.
+
 Use this guide when generating `config.yaml`, `inventory.yaml`, or `parsers.yaml` for this repository. The output must be valid YAML and must match the schema and runtime behavior described here.
 
 ## Goal
@@ -75,7 +79,7 @@ Rules:
 - `output.directory` defaults to `artifacts` when structured output is enabled.
 - `output.save_raw` and `output.save_parsed` control per-step attempt artifacts.
 - `output.summary_file` writes a run summary relative to the timestamped run directory unless it is absolute.
-- For this CLI, generate SSH playbooks under `ssh`. Other protocols may appear in sample configs, but the step engine, parsers, variables, retries, and actions described here apply to SSH.
+- Generate CLI or mixed workflows under `ssh`, and NETCONF-only workflows under `netconf`. Both use the step engine, validation, retries and control flow. See the dedicated conversion skill for current NETCONF syntax.
 
 ## SSH Device Entries
 

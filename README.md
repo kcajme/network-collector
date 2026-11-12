@@ -2339,8 +2339,9 @@ reuse an earlier ID. Ordinary validation extraction cannot overwrite this value.
 `register_integer` is supported on SSH command steps and explicit NETCONF RPC steps without `retry` or other
 control/transport fields. Retry status checks, not commands initiating upgrades.
 Its value can be used in SSH commands (including validation action commands),
-messages and validations; it remains blocked in NETCONF and declarative ensure
-fields. The capture pattern and bounds are static playbook configuration. As
+messages and validations. Integers captured from NETCONF RPCs may also be used
+in explicit NETCONF RPC payloads; they remain blocked in NETCONF operation,
+datastore, payload-file and declarative ensure fields. The capture pattern and bounds are static playbook configuration. As
 with any device output, a numeric ID is not proof of operation success: retain
 appropriate completion/status checks before activation. Adapt the install syntax
 to the target platform. No manual ID entry is needed.
@@ -2502,3 +2503,10 @@ code. Repository administrators must configure the GitHub `release` environment
 with required reviewers and permitted release tags; naming the environment in YAML
 alone does not establish those protections. Publishing fails closed if the
 reviewer-rule check is missing, fails, or finds no required reviewers.
+
+### Copilot skill for CLI-to-NETCONF conversion
+
+Use [the conversion skill](.github/skills/network-collector-cli-to-netconf/SKILL.md)
+when asking Copilot to translate existing `cmd:` workflows to NETCONF. It covers
+model verification, XML payloads, install completion, FPD readiness, reboot
+reconnection, timeout inheritance, and offline validation.
