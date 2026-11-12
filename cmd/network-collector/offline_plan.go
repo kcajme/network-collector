@@ -189,11 +189,13 @@ func renderOfflinePlan(plan offlinePlan) string {
 // editors useful completion for the public DSL while Go preflight remains the
 // authoritative source of semantic checks (imports, variable flow and safety).
 func networkCollectorSchema() map[string]interface{} {
+	timeoutSchema := map[string]interface{}{"type": "integer", "minimum": 0, "maximum": int64(1<<63-1) / int64(1000000000), "description": "Seconds per operation; 0 inherits"}
 	step := map[string]interface{}{
 		"type": "object", "properties": map[string]interface{}{
-			"confirmation": map[string]interface{}{"type": "object", "required": []string{"prompt", "response"}, "properties": map[string]interface{}{"prompt": map[string]string{"type": "string"}, "response": map[string]interface{}{"enum": []string{"yes", "no", "y", "n"}}}},
-			"category":     map[string]string{"type": "string"},
-			"name":         map[string]string{"type": "string"}, "cmd": map[string]string{"type": "string"}, "parser": map[string]string{"type": "string"},
+			"operation_timeout": timeoutSchema,
+			"confirmation":      map[string]interface{}{"type": "object", "required": []string{"prompt", "response"}, "properties": map[string]interface{}{"prompt": map[string]string{"type": "string"}, "response": map[string]interface{}{"enum": []string{"yes", "no", "y", "n"}}}},
+			"category":          map[string]string{"type": "string"},
+			"name":              map[string]string{"type": "string"}, "cmd": map[string]string{"type": "string"}, "parser": map[string]string{"type": "string"},
 			"register_integer": map[string]interface{}{"$ref": "#/$defs/register_integer"},
 			"message":          map[string]string{"type": "string"}, "register": map[string]string{"type": "string"}, "when": map[string]interface{}{"$ref": "#/$defs/when"},
 			"wait_seconds": map[string]interface{}{"type": "integer", "minimum": 0}, "ssh_probe": map[string]interface{}{"$ref": "#/$defs/ssh_probe"},
@@ -209,7 +211,8 @@ func networkCollectorSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"$schema": "https://json-schema.org/draft/2020-12/schema", "title": "Network Collector playbook", "type": "object",
 		"properties": map[string]interface{}{
-			"name_playbook": map[string]string{"type": "string"}, "imports": map[string]interface{}{"oneOf": []interface{}{map[string]string{"type": "string"}, map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}}}},
+			"operation_timeout": timeoutSchema,
+			"name_playbook":     map[string]string{"type": "string"}, "imports": map[string]interface{}{"oneOf": []interface{}{map[string]string{"type": "string"}, map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}}}},
 			"inventory_file": map[string]string{"type": "string"}, "parsers_file": map[string]string{"type": "string"}, "vars": map[string]interface{}{"type": "object"},
 			"fail_on_fail": map[string]string{"type": "boolean"}, "security_mode": map[string]interface{}{"enum": []string{"production", "permissive"}},
 			"execution": map[string]interface{}{"$ref": "#/$defs/execution"}, "schedule": map[string]interface{}{"$ref": "#/$defs/schedule"},
@@ -224,7 +227,7 @@ func networkCollectorSchema() map[string]interface{} {
 				"min":     map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 2147483647},
 				"max":     map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 2147483647},
 			}},
-			"device":   map[string]interface{}{"type": "object", "properties": map[string]interface{}{"netconf_port": map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 65535, "default": 830}, "hostname": map[string]string{"type": "string"}, "ip": map[string]string{"type": "string"}, "type": map[string]string{"type": "string"}, "groups": map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}}, "steps": map[string]interface{}{"type": "array", "items": map[string]interface{}{"$ref": "#/$defs/step"}}, "cmd": map[string]string{"type": "string"}, "ssh_security": map[string]interface{}{"$ref": "#/$defs/ssh_security"}}},
+			"device":   map[string]interface{}{"type": "object", "properties": map[string]interface{}{"operation_timeout": timeoutSchema, "netconf_port": map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 65535, "default": 830}, "hostname": map[string]string{"type": "string"}, "ip": map[string]string{"type": "string"}, "type": map[string]string{"type": "string"}, "groups": map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}}, "steps": map[string]interface{}{"type": "array", "items": map[string]interface{}{"$ref": "#/$defs/step"}}, "cmd": map[string]string{"type": "string"}, "ssh_security": map[string]interface{}{"$ref": "#/$defs/ssh_security"}}},
 			"workflow": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"parameters": map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}}, "steps": map[string]interface{}{"type": "array", "items": map[string]interface{}{"$ref": "#/$defs/step"}}}},
 			"step":     step, "when": map[string]interface{}{"type": "object", "required": []string{"variable", "condition"}, "properties": map[string]interface{}{"variable": map[string]string{"type": "string"}, "condition": map[string]string{"type": "string"}, "expected": map[string]interface{}{}}},
 			"netconf":        map[string]interface{}{"type": "object", "properties": map[string]interface{}{"max_attempts": map[string]interface{}{"type": "integer", "minimum": 1, "maximum": 1000}, "interval_seconds": map[string]interface{}{"type": "integer", "minimum": 1}, "operation": map[string]string{"type": "string"}, "target": map[string]string{"type": "string"}, "payload": map[string]string{"type": "string"}, "payload_file": map[string]string{"type": "string"}}},

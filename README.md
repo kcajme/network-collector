@@ -2265,7 +2265,36 @@ ssh:
 
 Safety constraints are enforced: `count` is required and limited to 1–1000, an interval of at least one second is required when `count` is greater than one, repeat nesting is limited to three levels, and an invalid repeat stops that device. Retries inside a repeat must set a positive `max_attempts`; an unbounded `until_pass` retry is rejected. `stop_on_failure` defaults to `true`; set it to `false` only when later iterations should continue after a failed command, parser, validation, or output write. A repeat step cannot also define its own command, wait, probe, or validation—those belong under its nested `steps`.
 
-Use `operation_timeout` on an SSH device to increase the scrapligo operation timeout for long-running commands. The value is seconds; for example, `operation_timeout: 120` gives commands up to two minutes to return to the prompt.
+Use `operation_timeout` at playbook, target, or individual-step level. Values are
+seconds. A positive step value overrides the target/inventory value, which
+overrides the playbook default. Omitted or zero values inherit the surrounding
+default. With no configured value, existing defaults remain 90 seconds for SSH
+commands and 30 seconds for collector NETCONF RPCs. Negative or overflowing
+values are rejected before execution.
+
+```yaml
+operation_timeout: 90  # Playbook-wide default for SSH and NETCONF targets
+ssh:
+  - type: cisco_iosxr
+    operation_timeout: 120  # Optional target override
+    steps:
+      - name: deactivate-packages
+        operation_timeout: 1800  # This command may take 30 minutes
+        cmd: 'install deactivate example-package synchronous'
+      - name: check-install
+        cmd: 'show install request'  # Returns to this target's 120 seconds
+```
+
+Place a NETCONF step override alongside `netconf:`, not inside it. Step scopes
+include confirmation exchanges and all SSH/NETCONF operations in an ensure or
+facts step. Control steps can supply defaults to their nested steps, which can
+override them again. Parallel branches use independent sessions. The previous
+timeout is restored after completion or failure, including newly connected
+sessions.
+
+For retrying validation steps, each command/RPC attempt gets its own operation
+timeout. Retry intervals, attempt counts, wait steps, connection timeouts and
+reconnection budgets remain separate; this setting is not an overall job deadline.
 
 Use `wait_seconds` on a step to pause while keeping the SSH connection open. A wait-only step does not require `cmd`; if both `wait_seconds` and `cmd` are set, the collector waits first and then runs the command.
 

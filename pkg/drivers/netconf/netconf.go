@@ -505,3 +505,26 @@ func (n *ScrapligoNETCONF) Close() error {
 		return fmt.Errorf("NETCONF close exceeded %s; channel was forcibly aborted", timeout)
 	}
 }
+
+// OperationTimeout returns the effective timeout for RPCs on this session.
+func (n *ScrapligoNETCONF) OperationTimeout() time.Duration {
+	if session, ok := n.network.(*scrapligoSession); ok {
+		return session.driver.Channel.GetTimeout(-1)
+	}
+	if n.opsTimeout > 0 {
+		return n.opsTimeout
+	}
+	return 60 * time.Second
+}
+
+// SetOperationTimeout affects RPCs, leaving socket/connection timeouts alone.
+// Calls must be serialized with operations on this NETCONF session.
+func (n *ScrapligoNETCONF) SetOperationTimeout(timeout time.Duration) {
+	if timeout <= 0 {
+		return
+	}
+	n.opsTimeout = timeout
+	if session, ok := n.network.(*scrapligoSession); ok {
+		session.driver.Channel.TimeoutOps = timeout
+	}
+}

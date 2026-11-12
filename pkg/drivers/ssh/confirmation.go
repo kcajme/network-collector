@@ -32,7 +32,7 @@ func (s *scrapligoSSHSession) SendConfirmation(response string, waitForPrompt bo
 		return nil, err
 	}
 	s.reloadExpected = true
-	ctx, cancel := context.WithTimeout(context.Background(), s.driver.Channel.GetTimeout(0))
+	ctx, cancel := context.WithTimeout(context.Background(), s.driver.Channel.GetTimeout(-1))
 	defer cancel()
 	ack := regexp.MustCompile(regexp.QuoteMeta(response) + `\r?\n`)
 	var output []byte

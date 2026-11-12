@@ -13,6 +13,16 @@ import (
 )
 
 func TestConfirmationAcrossRealSSHTransport(t *testing.T) {
+	for _, acknowledge := range []bool{true, false} {
+		name := "acknowledged"
+		if !acknowledge {
+			name = "answer-ack-timeout"
+		}
+		t.Run(name, func(t *testing.T) { testConfirmationTransport(t, acknowledge) })
+	}
+}
+
+func testConfirmationTransport(t *testing.T, acknowledge bool) {
 	_, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -74,14 +84,18 @@ func TestConfirmationAcrossRealSSHTransport(t *testing.T) {
 				last = b[0]
 				line := command.String()
 				command.Reset()
-				io.WriteString(channel, "\r\n")
+				if line != "yes" || acknowledge {
+					io.WriteString(channel, "\r\n")
+				}
 				switch {
 				case strings.HasPrefix(line, "install activate"):
 					io.WriteString(channel, "This install operation will reload the system, continue? [yes/no]:")
 				case line == "yes":
 					received <- line
-					channel.Close()
-					return
+					if acknowledge {
+						channel.Close()
+						return
+					}
 				default:
 					io.WriteString(channel, "router#")
 				}
@@ -94,8 +108,15 @@ func TestConfirmationAcrossRealSSHTransport(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
+	client.SetOperationTimeout(250 * time.Millisecond)
 	started := time.Now()
 	output, err := client.ExecuteWithConfirmation("install activate id 58 sync", `continue\?`, "yes", false)
+	if !acknowledge {
+		if err == nil || !strings.Contains(err.Error(), "confirmation delivery was not acknowledged") || time.Since(started) > 2*time.Second {
+			t.Fatalf("configured acknowledgement timeout not enforced: %v", err)
+		}
+		return
+	}
 	if err != nil || !strings.Contains(output, "continue?") {
 		t.Fatalf("confirmation failed: %q %v", output, err)
 	}

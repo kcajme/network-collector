@@ -165,6 +165,9 @@ func main() {
 	}
 	devices := append([]DeviceConfig(nil), sshDevices...)
 	devices = append(devices, netconfDevices...)
+	for index := range devices {
+		devices[index] = withPlaybookTimeout(devices[index], config)
+	}
 	securityMode, err := validateSecurityPolicy(config, devices)
 	if err != nil {
 		slog.Error("security policy rejected configuration", "error", err)

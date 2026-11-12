@@ -1,0 +1,11 @@
+inventory_file: inventory.yaml
+operation_timeout: 90
+ssh:
+  - type: cisco_iosxr
+    operation_timeout: 120
+    steps:
+      - name: collect-version
+        operation_timeout: 300
+        cmd: show version
+      - name: collect-install-state
+        cmd: show install request

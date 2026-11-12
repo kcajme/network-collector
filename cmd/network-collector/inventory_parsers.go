@@ -133,6 +133,9 @@ func loadInventory(inventoryFile, configFile string) (*InventoryConfig, error) {
 
 	inventory.baseDir = filepath.Dir(path)
 	for index := range inventory.Hosts {
+		if err := validateOperationTimeout(inventory.Hosts[index].OperationTimeout); err != nil {
+			return nil, err
+		}
 		if err := validateNETCONFPort(inventory.Hosts[index].NETCONFPort); err != nil {
 			return nil, fmt.Errorf("inventory host %d: %w", index, err)
 		}

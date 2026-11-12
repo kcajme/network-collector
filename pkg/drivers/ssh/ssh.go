@@ -523,3 +523,22 @@ func bundledPlatform(name string) (string, error) {
 	}
 	return "", fmt.Errorf("unsupported SSH platform %q: use a bundled platform name", name)
 }
+
+// OperationTimeout returns the configured per-operation timeout.
+func (c *Client) OperationTimeout() time.Duration { return c.opsTimeout }
+
+// SetOperationTimeout changes operations on this session, not socket timeouts.
+// Calls must be serialized with operations on the same SSH session.
+func (c *Client) SetOperationTimeout(timeout time.Duration) {
+	if timeout <= 0 {
+		return
+	}
+	c.opsTimeout = timeout
+	if session, ok := c.network.(interface{ SetOperationTimeout(time.Duration) }); ok {
+		session.SetOperationTimeout(timeout)
+	}
+}
+
+func (s *scrapligoSSHSession) SetOperationTimeout(timeout time.Duration) {
+	s.driver.Channel.TimeoutOps = timeout
+}

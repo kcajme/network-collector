@@ -79,6 +79,9 @@ func preflightSteps(steps []StepConfig, workflows map[string]WorkflowConfig, sco
 }
 
 func preflightStep(step StepConfig, workflows map[string]WorkflowConfig, scope preflightScope, path string, depth int) error {
+	if err := validateOperationTimeout(step.OperationTimeout); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
 	if err := validateConfirmation(step); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}

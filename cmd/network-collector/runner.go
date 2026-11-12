@@ -34,6 +34,7 @@ func runSSHDevice(index, occurrence int, device DeviceConfig, config Config, use
 }
 
 func runSSHDeviceContext(runContext context.Context, index, occurrence int, device DeviceConfig, config Config, username, password string, rsaAuth *rsaTokenAuth, jsonOut, pretty, approveAll bool, approvals *approvalInput, approvalWriter io.Writer, parsers map[string]ParserModuleConfig, variables map[string]string, runDir string, events *eventDispatcher, journal *runJournal, resumeCompleted map[string]string) (result deviceRunResult) {
+	device = withPlaybookTimeout(device, config)
 	startedAt := time.Now()
 	checkpoint := config.checkpoints[variableScopeKey(device.Hostname, device.IP)]
 	if checkpoint != nil {

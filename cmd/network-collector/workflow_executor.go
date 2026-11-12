@@ -890,7 +890,25 @@ func executeStepsAtDepth(ctx *stepExecutionContext, client **ssh.Client, steps [
 	ctx.stepIndexOffset = 0
 	defer func() { ctx.executionPath = parentPath; ctx.stepIndexOffset = stepOffset }()
 	stopDeviceSteps := false
+	var restoreTimeout func()
+	defer func() {
+		if restoreTimeout != nil {
+			restoreTimeout()
+		}
+	}()
 	for stepIndex, step := range steps {
+		if restoreTimeout != nil {
+			restoreTimeout()
+			restoreTimeout = nil
+		}
+		if err := validateOperationTimeout(step.OperationTimeout); err != nil {
+			*ctx.runFailed = true
+			recordStepFailure(ctx, step.Name, err.Error())
+			return true
+		}
+		if step.OperationTimeout > 0 {
+			restoreTimeout = scopeOperationTimeout(ctx, client, time.Duration(step.OperationTimeout)*time.Second)
+		}
 		ctx.executionPath = fmt.Sprintf("%s/step:%d", parentPath, stepOffset+stepIndex)
 		instanceID := executionID(ctx)
 		inputDigest := executionBinding(ctx)
